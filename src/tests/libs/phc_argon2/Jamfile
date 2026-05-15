@@ -1,0 +1,23 @@
+SubDir HAIKU_TOP src tests libs phc_argon2 ;
+
+UseHeaders [ FDirName $(HAIKU_TOP) src libs phc_argon2 ] : true ;
+
+UnitTestLib libphc_argon2_test.so :
+	Argon2KatTest.cpp
+	CryptTestAddon.cpp
+	:
+	be
+	[ TargetLibstdc++ ]
+	[ TargetLibsupc++ ]
+	:
+	libphc_argon2.a
+;
+
+ObjectC++Flags
+	[ FGristFiles Argon2KatTest.o CryptTestAddon.o ]
+	:
+	-std=c++23
+	-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+	-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+	-Wold-style-cast -Wnon-virtual-dtor
+;

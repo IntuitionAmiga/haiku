@@ -1,0 +1,26 @@
+SubDir HAIKU_TOP src libs phc_argon2 ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS) {
+	UseHeaders [ FDirName $(SUBDIR) ] : true ;
+	UseHeaders [ FDirName $(SUBDIR) blake2 ] : true ;
+
+	SEARCH_SOURCE += [ FDirName $(SUBDIR) blake2 ] ;
+
+	StaticLibrary [ MultiArchDefaultGristFiles libphc_argon2.a ] :
+		argon2.c
+		core.c
+		encoding.c
+		ref.c
+		blake2b.c
+	;
+
+	Depends [ MultiArchDefaultGristFiles libphc_argon2.a ] : std_probe ;
+
+	ObjectCcFlags
+		[ FGristFiles argon2.o core.o encoding.o ref.o blake2b.o ]
+		:
+		-DARGON2_NO_THREADS
+	;
+}

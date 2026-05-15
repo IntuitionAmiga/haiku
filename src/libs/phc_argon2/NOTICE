@@ -1,0 +1,26 @@
+P-H-C Argon2 reference implementation vendor import
+====================================================
+
+Upstream: https://github.com/P-H-C/phc-winner-argon2.git
+Commit: f57e61e19229e23c4445b85494dbf7c07de721cb
+License: Creative Commons CC0 1.0 Universal or Apache License 2.0, at your
+option, as stated in the upstream source headers.
+
+Imported files:
+
+- src/argon2.c -> argon2.c
+- include/argon2.h -> argon2.h
+- src/core.c -> core.c
+- src/core.h -> core.h
+- src/encoding.c -> encoding.c
+- src/encoding.h -> encoding.h
+- src/ref.c -> ref.c
+- src/thread.h -> thread.h
+- src/blake2/blake2b.c -> blake2/blake2b.c
+- src/blake2/blake2.h -> blake2/blake2.h
+- src/blake2/blake2-impl.h -> blake2/blake2-impl.h
+- src/blake2/blamka-round-ref.h -> blake2/blamka-round-ref.h
+
+The Jamfile builds the reference implementation with ARGON2_NO_THREADS and does
+not import src/thread.c, so Argon2 lanes run sequentially in userland while
+preserving the same Argon2id output.
