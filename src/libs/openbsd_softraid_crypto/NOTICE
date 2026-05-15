@@ -1,0 +1,17 @@
+OpenBSD softraid AES-XTS vendor import
+=======================================
+
+Upstream:
+https://github.com/openbsd/src.git
+
+Imported from commit:
+bcab7b16253939ca6388e7cada0dd462a0a1dbb6
+
+Imported files:
+- sys/lib/libsa/aes_xts.c -> xts.c
+- sys/lib/libsa/aes_xts.h -> aes_xts.h
+- sys/crypto/rijndael.c -> aes.c
+- sys/crypto/rijndael.h -> crypto/rijndael.h
+
+The imported files above are verbatim copies. Haiku-specific build glue and
+compatibility shims are separate files in this directory.

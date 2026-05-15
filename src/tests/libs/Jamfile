@@ -5,3 +5,8 @@ SubInclude HAIKU_TOP src tests libs bsd ;
 SubInclude HAIKU_TOP src tests libs gnu ;
 SubInclude HAIKU_TOP src tests libs linprog ;
 
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS) {
+	SubInclude HAIKU_TOP src tests libs openbsd_softraid_crypto ;
+}

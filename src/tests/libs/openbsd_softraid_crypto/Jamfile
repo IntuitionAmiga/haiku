@@ -1,0 +1,24 @@
+SubDir HAIKU_TOP src tests libs openbsd_softraid_crypto ;
+
+UseHeaders [ FDirName $(HAIKU_TOP) src libs openbsd_softraid_crypto ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) src libs openbsd_softraid_crypto crypto ] : true ;
+
+UnitTestLib libopenbsd_softraid_crypto_test.so :
+	CryptTestAddon.cpp
+	XtsKatTest.cpp
+	:
+	be
+	[ TargetLibstdc++ ]
+	[ TargetLibsupc++ ]
+	:
+	libopenbsd_softraid_crypto.a
+;
+
+ObjectC++Flags
+	[ FGristFiles CryptTestAddon.o XtsKatTest.o ]
+	:
+	-std=c++23
+	-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+	-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+	-Wold-style-cast -Wnon-virtual-dtor
+;

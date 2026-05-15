@@ -1,0 +1,43 @@
+SubDir HAIKU_TOP src libs openbsd_softraid_crypto ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS) {
+	UseHeaders [ FDirName $(SUBDIR) ] : true ;
+	UseHeaders [ FDirName $(SUBDIR) crypto ] : true ;
+	UseHeaders [ FDirName $(SUBDIR) sys ] : true ;
+	UseHeaders [ FDirName $(SUBDIR) lib libsa ] : true ;
+
+	StaticLibrary [ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ] :
+		xts.c
+		aes.c
+		xts_haiku_shim.cpp
+	;
+
+	KernelStaticLibrary libopenbsd_softraid_crypto_kernel.a :
+		kernel_xts.c
+		kernel_aes.c
+		kernel_xts_haiku_shim.cpp
+		:
+		-D_KERNEL_MODE
+	;
+
+	Depends [ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		: std_probe ;
+	Depends libopenbsd_softraid_crypto_kernel.a : kernel_probe ;
+
+	ObjectC++Flags xts_haiku_shim.cpp :
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor
+		;
+	ObjectC++Flags kernel_xts_haiku_shim.cpp :
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor
+		-fno-exceptions
+		-fno-rtti
+		;
+}
