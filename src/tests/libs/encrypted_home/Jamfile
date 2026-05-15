@@ -1,0 +1,31 @@
+SubDir HAIKU_TOP src tests libs encrypted_home ;
+
+UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) src libs encrypted_home ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) src libs phc_argon2 ] : true ;
+UseBuildFeatureHeaders openssl ;
+
+UnitTestLib libencrypted_home_test.so :
+	EncryptedVolumeHeaderTest.cpp
+	CryptTestAddon.cpp
+	:
+	be
+	[ TargetLibstdc++ ]
+	[ TargetLibsupc++ ]
+	[ BuildFeatureAttribute openssl : libraries ]
+	:
+	libencrypted_home_userland.a
+	libphc_argon2.a
+;
+
+ObjectC++Flags
+	[ FGristFiles EncryptedVolumeHeaderTest.o CryptTestAddon.o ]
+	:
+	-std=c++23
+	-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+	-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+	-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+;
+
+Includes [ FGristFiles EncryptedVolumeHeaderTest.cpp CryptTestAddon.cpp ] :
+	[ BuildFeatureAttribute openssl : headers ] ;
