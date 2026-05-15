@@ -1,0 +1,18 @@
+# Encrypted home build feature probe results.
+#
+# This file is intentionally limited to build-consumable feature flags. Local
+# provenance notes and machine-specific probe logs live outside the repository.
+
+ENCRYPTED_HOME_SUPPORTED_ARCHS = x86_64 riscv64 ;
+
+ENCRYPTED_HOME_USERLAND_CXX_STANDARD = c++23 ;
+ENCRYPTED_HOME_USERLAND_HAS_STD_EXPECTED = 1 ;
+ENCRYPTED_HOME_USERLAND_HAS_STD_SPAN = 1 ;
+ENCRYPTED_HOME_USERLAND_HAS_STD_BYTESWAP = 1 ;
+ENCRYPTED_HOME_USERLAND_HAS_CONCEPTS = 1 ;
+
+# Informational only. The kernel driver does not use hosted C++ library headers.
+ENCRYPTED_HOME_KERNEL_HAS_STD_EXPECTED = unknown ;
+ENCRYPTED_HOME_KERNEL_HAS_STD_SPAN = unknown ;
+ENCRYPTED_HOME_KERNEL_HAS_STD_ARRAY = unknown ;
+ENCRYPTED_HOME_KERNEL_HAS_STD_BYTESWAP = unknown ;

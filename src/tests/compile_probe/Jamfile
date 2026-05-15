@@ -1,0 +1,49 @@
+SubDir HAIKU_TOP src tests compile_probe ;
+
+UsePrivateKernelHeaders ;
+
+local strictWarnings =
+	-Werror
+	-Wall
+	-Wextra
+	-Wconversion
+	-Wcast-align
+	-Wformat=2
+	-Wnull-dereference
+	-Wdouble-promotion
+	;
+
+local userlandStrictWarnings =
+	$(strictWarnings)
+	-Wpedantic
+	-Wshadow
+	;
+
+SimpleTest std_probe
+	: std_probe.cpp
+	: [ TargetLibstdc++ ] [ TargetLibsupc++ ]
+	;
+ObjectC++Flags std_probe.cpp :
+	-std=c++23
+	$(userlandStrictWarnings)
+	-Wold-style-cast
+	-Wnon-virtual-dtor
+	;
+
+SimpleTest explicit_this_probe
+	: explicit_this_probe.cpp
+	: [ TargetLibstdc++ ] [ TargetLibsupc++ ]
+	;
+ObjectC++Flags explicit_this_probe.cpp :
+	-std=c++23
+	$(userlandStrictWarnings)
+	-Wold-style-cast
+	-Wnon-virtual-dtor
+	;
+
+KernelAddon kernel_probe : kernel_probe.cpp ;
+ObjectC++Flags kernel_probe.cpp :
+	$(strictWarnings)
+	-fno-exceptions
+	-fno-rtti
+	;
