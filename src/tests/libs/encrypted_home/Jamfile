@@ -6,6 +6,7 @@ UseHeaders [ FDirName $(HAIKU_TOP) src libs phc_argon2 ] : true ;
 UseBuildFeatureHeaders openssl ;
 
 UnitTestLib libencrypted_home_test.so :
+	EncryptedBlockTranslatorTest.cpp
 	EncryptedVolumeHeaderTest.cpp
 	CryptTestAddon.cpp
 	:
@@ -15,11 +16,13 @@ UnitTestLib libencrypted_home_test.so :
 	[ BuildFeatureAttribute openssl : libraries ]
 	:
 	libencrypted_home_userland.a
+	libopenbsd_softraid_crypto.a
 	libphc_argon2.a
 ;
 
 ObjectC++Flags
-	[ FGristFiles EncryptedVolumeHeaderTest.o CryptTestAddon.o ]
+	[ FGristFiles EncryptedBlockTranslatorTest.o EncryptedVolumeHeaderTest.o
+		CryptTestAddon.o ]
 	:
 	-std=c++23
 	-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
@@ -27,5 +30,6 @@ ObjectC++Flags
 	-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
 ;
 
-Includes [ FGristFiles EncryptedVolumeHeaderTest.cpp CryptTestAddon.cpp ] :
+Includes [ FGristFiles EncryptedBlockTranslatorTest.cpp
+	EncryptedVolumeHeaderTest.cpp CryptTestAddon.cpp ] :
 	[ BuildFeatureAttribute openssl : headers ] ;

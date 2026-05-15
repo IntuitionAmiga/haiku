@@ -6,19 +6,22 @@ if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS)
 		&& [ FIsBuildFeatureEnabled openssl ] {
 	UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
 	UseHeaders [ FDirName $(HAIKU_TOP) src libs phc_argon2 ] : true ;
+	UseHeaders [ FDirName $(HAIKU_TOP) src libs openbsd_softraid_crypto ] : true ;
 	UseBuildFeatureHeaders openssl ;
 
 	StaticLibrary [ MultiArchDefaultGristFiles libencrypted_home_userland.a ] :
+		encrypted_block_translator.cpp
 		encrypted_volume_header.cpp
 	;
 
 	Depends [ MultiArchDefaultGristFiles libencrypted_home_userland.a ] :
 		std_probe
+		libopenbsd_softraid_crypto.a
 		libphc_argon2.a
 	;
 
 	ObjectC++Flags
-		[ FGristFiles encrypted_volume_header.o ]
+		[ FGristFiles encrypted_block_translator.o encrypted_volume_header.o ]
 		:
 		-std=c++23
 		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
@@ -26,6 +29,7 @@ if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS)
 		-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
 	;
 
-	Includes [ FGristFiles encrypted_volume_header.cpp ] :
+	Includes [ FGristFiles encrypted_block_translator.cpp
+		encrypted_volume_header.cpp ] :
 		[ BuildFeatureAttribute openssl : headers ] ;
 }

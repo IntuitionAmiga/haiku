@@ -7,6 +7,7 @@
 #include <TestSuiteAddon.h>
 #include <TestSuite.h>
 
+#include "EncryptedBlockTranslatorTest.h"
 #include "EncryptedVolumeHeaderTest.h"
 
 
@@ -21,6 +22,8 @@ BTestSuite*
 getTestSuite()
 {
 	BTestSuite* suite = new BTestSuite(getTestSuiteName());
+	suite->addTest("Encrypted block translator",
+		EncryptedBlockTranslatorTest::Suite());
 	suite->addTest("Encrypted volume header",
 		EncryptedVolumeHeaderTest::Suite());
 	return suite;
