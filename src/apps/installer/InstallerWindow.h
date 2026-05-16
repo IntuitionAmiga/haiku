@@ -17,13 +17,22 @@ namespace BPrivate {
 using namespace BPrivate;
 
 class BButton;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+class BCheckBox;
+#endif
 class BLayoutItem;
 class BGroupView;
 class BMenu;
 class BMenuField;
 class BMenuItem;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+class BRadioButton;
+#endif
 class BStatusBar;
 class BStringView;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+class BTextControl;
+#endif
 class BTextView;
 class PackagesView;
 class WorkerThread;
@@ -64,12 +73,25 @@ private:
 			BTextView*			fStatusView;
 			BMenu*				fSrcMenu;
 			BMenu*				fDestMenu;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+			BMenu*				fHomeMenu;
+#endif
 			BMenuField*			fSrcMenuField;
 			BMenuField*			fDestMenuField;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+			BMenuField*			fHomeMenuField;
+#endif
 
 			PaneSwitch*			fPackagesSwitch;
 			PackagesView*		fPackagesView;
 			BStringView*		fSizeView;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+			BCheckBox*			fEncryptHomeCheckBox;
+			BTextControl*		fPassphraseControl;
+			BTextControl*		fPassphraseConfirmControl;
+			BRadioButton*		fCipherAES128Button;
+			BRadioButton*		fCipherAES256Button;
+#endif
 
 			BStatusBar*			fProgressBar;
 

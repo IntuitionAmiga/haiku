@@ -1,9 +1,54 @@
 SubDir HAIKU_TOP src tests apps installer ;
 
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
 UsePrivateHeaders shared ;
 UsePrivateHeaders storage ;
+UsePrivateHeaders encrypted_home ;
 SubDirHdrs [ FDirName $(HAIKU_TOP) src kits tracker ] ;
 SubDirHdrs [ FDirName $(HAIKU_TOP) src apps installer ] ;
+
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
+	UseBuildFeatureHeaders openssl ;
+
+	SimpleTest EncryptedHomeFlowTest :
+		EncryptedHomeFlowTest.cpp
+		EncryptedHomeProvisioner.cpp
+		:
+		be
+		[ TargetLibstdc++ ]
+		[ TargetLibsupc++ ]
+		[ BuildFeatureAttribute openssl : libraries ]
+		[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ]
+	;
+
+	Depends EncryptedHomeFlowTest :
+		std_probe
+		[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ]
+	;
+
+	SEARCH on [ FGristFiles EncryptedHomeProvisioner.cpp ] =
+		[ FDirName $(HAIKU_TOP) src apps installer ] ;
+
+	ObjectC++Flags
+		[ FGristFiles EncryptedHomeFlowTest.o EncryptedHomeProvisioner.o ]
+		:
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+		-Wno-old-style-cast -Wno-shadow
+	;
+
+	Includes [ FGristFiles EncryptedHomeProvisioner.cpp
+		EncryptedHomeFlowTest.cpp EncryptedHomeProvisioner.o
+		EncryptedHomeFlowTest.o ] :
+		[ BuildFeatureAttribute openssl : headers ] ;
+}
 
 Application TestInstaller : 
 	CopyEngine.cpp

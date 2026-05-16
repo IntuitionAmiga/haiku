@@ -9,6 +9,10 @@
 #include <errno.h>
 #include <stdio.h>
 
+#ifdef ENCRYPTED_HOME_AVAILABLE
+#	include <limits>
+#	include <optional>
+#endif
 #include <set>
 #include <string>
 #include <strings.h>
@@ -32,6 +36,9 @@
 
 #include "AutoLocker.h"
 #include "CopyEngine.h"
+#ifdef ENCRYPTED_HOME_AVAILABLE
+#	include "EncryptedHomeProvisioner.h"
+#endif
 #include "InstallerDefs.h"
 #include "PackageViews.h"
 #include "PartitionMenuItem.h"
@@ -58,6 +65,11 @@ const char BOOT_PATH[] = "/boot";
 
 const uint32 MSG_START_INSTALLING = 'eSRT';
 
+#ifdef ENCRYPTED_HOME_AVAILABLE
+using BPrivate::EncryptedHome::Installer::EncryptedHomeInstallOptions;
+using BPrivate::EncryptedHome::Installer::ProvisionedEncryptedHome;
+#endif
+
 
 class SourceVisitor : public BDiskDeviceVisitor {
 public:
@@ -79,6 +91,23 @@ public:
 private:
 	BMenu* fMenu;
 };
+
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+class HomeVisitor : public BDiskDeviceVisitor {
+public:
+	HomeVisitor(BMenu* menu, BMenu* sourceMenu, partition_id bootPartitionID);
+	virtual bool Visit(BDiskDevice* device);
+	virtual bool Visit(BPartition* partition, int32 level);
+
+private:
+			bool				_IsInstallSource(partition_id id) const;
+
+	BMenu* fMenu;
+	BMenu* fSourceMenu;
+	partition_id fBootPartitionID;
+};
+#endif
 
 
 class EFIVisitor : public BDiskDeviceVisitor {
@@ -164,6 +193,63 @@ private:
 };
 
 
+#ifdef ENCRYPTED_HOME_AVAILABLE
+static const char*
+RelativePath(const BString& sourceRoot, const char* path)
+{
+	size_t rootLength = sourceRoot.Length();
+	if (strncmp(path, sourceRoot.String(), rootLength) != 0)
+		return path;
+	if (path[rootLength] == '/')
+		return path + rootLength + 1;
+	if (path[rootLength] == '\0')
+		return "";
+	return path;
+}
+
+
+static status_t
+CollectCopyBytes(const BString& sourceRoot, CopyEngine::EntryFilter& filter,
+	BEntry& entry, off_t& bytes)
+{
+	struct stat statInfo;
+	status_t ret = entry.GetStat(&statInfo);
+	if (ret != B_OK)
+		return ret;
+
+	BPath path(&entry);
+	ret = path.InitCheck();
+	if (ret != B_OK)
+		return ret;
+
+	if (!filter.ShouldCopyEntry(entry, RelativePath(sourceRoot, path.Path()),
+			statInfo)) {
+		return B_OK;
+	}
+
+	if (S_ISDIR(statInfo.st_mode)) {
+		BDirectory directory(&entry);
+		ret = directory.InitCheck();
+		if (ret != B_OK)
+			return ret;
+
+		BEntry child;
+		while (directory.GetNextEntry(&child) == B_OK) {
+			ret = CollectCopyBytes(sourceRoot, filter, child, bytes);
+			if (ret != B_OK)
+				return ret;
+		}
+	} else if (!S_ISLNK(statInfo.st_mode)) {
+		if (statInfo.st_size > std::numeric_limits<off_t>::max() - bytes)
+			return B_BAD_VALUE;
+		bytes += statInfo.st_size;
+	}
+
+	return B_OK;
+}
+#endif
+
+
 // #pragma mark - WorkerThread
 
 
@@ -174,6 +260,12 @@ WorkerThread::WorkerThread(const BMessenger& owner)
 	fPackages(NULL),
 	fSpaceRequired(0),
 	fCancelSemaphore(-1)
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	,
+	fEncryptedHomeOptions(),
+	fEncryptedHomePassphrase(),
+	fEncryptedHomePassphraseLength(0)
+#endif
 {
 	Run();
 }
@@ -344,7 +436,8 @@ WorkerThread::InstallEFILoader(partition_id id, bool rename)
 
 
 void
-WorkerThread::ScanDisksPartitions(BMenu *srcMenu, BMenu *targetMenu, BMenu* EFIMenu)
+WorkerThread::ScanDisksPartitions(BMenu* srcMenu, BMenu* targetMenu,
+	BMenu* EFIMenu, BMenu* homeMenu)
 {
 	// NOTE: This is actually executed in the window thread.
 	BDiskDevice device;
@@ -357,13 +450,25 @@ WorkerThread::ScanDisksPartitions(BMenu *srcMenu, BMenu *targetMenu, BMenu* EFIM
 	fDDRoster.VisitEachPartition(&targetVisitor, &device, &partition);
 
 	BDiskDevice bootDevice;
-	BPartition* bootPartition;
+	BPartition* bootPartition = NULL;
 	partition_id bootId = -1;
 	if (fDDRoster.FindPartitionByMountPoint(BOOT_PATH, &bootDevice, &bootPartition) == B_OK
-		&& bootPartition->Parent() != NULL)
-		bootId = bootPartition->Parent()->ID();
+		&& bootPartition != NULL)
+		bootId = bootPartition->ID();
 
-	EFIVisitor EFIVisitor(EFIMenu, bootId);
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	if (homeMenu != NULL) {
+		HomeVisitor homeVisitor(homeMenu, srcMenu, bootId);
+		fDDRoster.VisitEachPartition(&homeVisitor, &device, &partition);
+	}
+#else
+	(void)homeMenu;
+	(void)bootId;
+#endif
+
+	partition_id bootDiskId = bootPartition != NULL && bootPartition->Parent() != NULL
+		? bootPartition->Parent()->ID() : -1;
+	EFIVisitor EFIVisitor(EFIMenu, bootDiskId);
 	fDDRoster.VisitEachPartition(&EFIVisitor, &device, &partition);
 }
 
@@ -383,13 +488,62 @@ void
 WorkerThread::StartInstall(partition_id sourcePartitionID,
 	partition_id targetPartitionID)
 {
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	EncryptedHomeInstallOptions options;
+	StartInstall(sourcePartitionID, targetPartitionID, options);
+#else
 	// Executed in window thread.
 	BMessage message(MSG_START_INSTALLING);
 	message.AddInt32("source", sourcePartitionID);
 	message.AddInt32("target", targetPartitionID);
 
 	PostMessage(&message, this);
+#endif
 }
+
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+void
+WorkerThread::StartInstall(partition_id sourcePartitionID,
+	partition_id targetPartitionID,
+	const EncryptedHomeInstallOptions& encryptedHomeOptions)
+{
+	// Executed in window thread.
+	_ClearEncryptedHomePassphrase();
+	fEncryptedHomeOptions = encryptedHomeOptions;
+	if (encryptedHomeOptions.enabled) {
+		fEncryptedHomePassphraseLength = encryptedHomeOptions.passphrase.size();
+		if (fEncryptedHomePassphraseLength <= fEncryptedHomePassphrase.size()) {
+			std::copy(encryptedHomeOptions.passphrase.begin(),
+				encryptedHomeOptions.passphrase.end(),
+				fEncryptedHomePassphrase.data());
+			fEncryptedHomeOptions.passphrase = {
+				fEncryptedHomePassphrase.data(),
+				fEncryptedHomePassphraseLength
+			};
+			fEncryptedHomeOptions.confirmation = fEncryptedHomeOptions.passphrase;
+		}
+	}
+
+	BMessage message(MSG_START_INSTALLING);
+	message.AddInt32("source", sourcePartitionID);
+	message.AddInt32("target", targetPartitionID);
+
+	PostMessage(&message, this);
+}
+#endif
+
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+void
+WorkerThread::_ClearEncryptedHomePassphrase()
+{
+	fEncryptedHomePassphrase.Cleanse();
+	fEncryptedHomePassphraseLength = 0;
+	fEncryptedHomeOptions.passphrase = {};
+	fEncryptedHomeOptions.confirmation = {};
+}
+#endif
 
 
 void
@@ -458,6 +612,16 @@ WorkerThread::_PerformInstall(partition_id sourcePartitionID,
 	partition_id targetPartitionID)
 {
 	CALLED();
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	struct PassphraseCleanup {
+		WorkerThread* worker;
+		~PassphraseCleanup()
+		{
+			worker->_ClearEncryptedHomePassphrase();
+		}
+	} passphraseCleanup { this };
+#endif
 
 	BPath targetDirectory;
 	BPath srcDirectory;
@@ -605,106 +769,182 @@ WorkerThread::_PerformInstall(partition_id sourcePartitionID,
 			return _InstallationError(err);
 	}
 
-	// Begin actual installation
-
-	ProgressReporter reporter(fOwner, new BMessage(MSG_STATUS_MESSAGE));
-	EntryFilter entryFilter(srcDirectory.Path());
-	CopyEngine engine(&reporter, &entryFilter);
-	BList unzipEngines;
-
-	// Create the default indices which should always be present on a proper
-	// boot volume. We don't care if the source volume does not have them.
-	// After all, the user might be re-installing to another drive and may
-	// want problems fixed along the way...
-	err = _CreateDefaultIndices(targetDirectory);
-	if (err != B_OK)
-		return _InstallationError(err);
-	// Mirror all the indices which are present on the source volume onto
-	// the target volume.
-	err = _MirrorIndices(srcDirectory, targetDirectory);
-	if (err != B_OK)
-		return _InstallationError(err);
-
-	// Let the engine collect information for the progress bar later on
-	engine.ResetTargets(srcDirectory.Path());
-	err = engine.CollectTargets(srcDirectory.Path(), fCancelSemaphore);
-	if (err != B_OK)
-		return _InstallationError(err);
-
-	// Collect selected packages also
-	if (fPackages) {
-		int32 count = fPackages->CountItems();
-		for (int32 i = 0; i < count; i++) {
-			Package *p = static_cast<Package*>(fPackages->ItemAt(i));
-			const BPath& pkgPath = p->Path();
-			err = pkgPath.InitCheck();
-			if (err != B_OK)
-				return _InstallationError(err);
-			err = engine.CollectTargets(pkgPath.Path(), fCancelSemaphore);
-			if (err != B_OK)
-				return _InstallationError(err);
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	std::optional<ProvisionedEncryptedHome> provisionedEncryptedHome;
+	if (fEncryptedHomeOptions.enabled) {
+		BDiskDevice homeDevice;
+		BPartition* homePartition = NULL;
+		err = fDDRoster.GetPartitionWithID(
+			fEncryptedHomeOptions.homePartitionID, &homeDevice,
+			&homePartition);
+		if (err != B_OK) {
+			err = fDDRoster.GetDeviceWithID(
+				fEncryptedHomeOptions.homePartitionID, &homeDevice);
+			homePartition = &homeDevice;
 		}
-	}
-
-	// collect information about all zip packages
-	err = _ProcessZipPackages(srcDirectory.Path(), targetDirectory.Path(),
-		&reporter, unzipEngines);
-	if (err != B_OK)
-		return _InstallationError(err);
-
-	reporter.StartTimer();
-
-	// copy source volume
-	err = engine.Copy(srcDirectory.Path(), targetDirectory.Path(),
-		fCancelSemaphore);
-	if (err != B_OK)
-		return _InstallationError(err);
-
-	// copy selected packages
-	if (fPackages) {
-		int32 count = fPackages->CountItems();
-		// FIXME: find_directory doesn't return the folder in the target volume,
-		// so we are hard coding this for now.
-		BPath targetPkgDir(targetDirectory.Path(), "system/packages");
-		err = targetPkgDir.InitCheck();
 		if (err != B_OK)
 			return _InstallationError(err);
-		for (int32 i = 0; i < count; i++) {
-			Package *p = static_cast<Package*>(fPackages->ItemAt(i));
-			const BPath& pkgPath = p->Path();
-			err = pkgPath.InitCheck();
-			if (err != B_OK)
-				return _InstallationError(err);
-			BPath targetPath(targetPkgDir.Path(), pkgPath.Leaf());
-			err = targetPath.InitCheck();
-			if (err != B_OK)
-				return _InstallationError(err);
-			err = engine.Copy(pkgPath.Path(), targetPath.Path(),
-				fCancelSemaphore);
-			if (err != B_OK)
-				return _InstallationError(err);
-		}
-	}
 
-	// Extract all zip packages. If an error occured, delete the rest of
-	// the engines, but stop extracting.
-	for (int32 i = 0; i < unzipEngines.CountItems(); i++) {
-		UnzipEngine* engine = reinterpret_cast<UnzipEngine*>(
-			unzipEngines.ItemAtFast(i));
-		if (err == B_OK)
-			err = engine->UnzipPackage();
-		delete engine;
+		off_t encryptedHomeBytes = 0;
+		err = _CollectEncryptedHomeBytes(srcDirectory, encryptedHomeBytes);
+		if (err != B_OK)
+			return _InstallationError(err);
+		auto payloadBytes = BPrivate::EncryptedHome::Installer
+			::EncryptedHomeProvisioner::PayloadBytes(homePartition->Size(),
+				homePartition->BlockSize());
+		if (!payloadBytes.has_value())
+			return _InstallationError(payloadBytes.error());
+		if (encryptedHomeBytes > static_cast<off_t>(*payloadBytes)) {
+			_SetStatusMessage(B_TRANSLATE("The encrypted home partition does "
+				"not have enough space for the selected home folder."));
+			return _InstallationError(B_DEVICE_FULL);
+		}
+
+		_SetStatusMessage(B_TRANSLATE("Preparing encrypted home folder."));
+		auto provisioned = BPrivate::EncryptedHome::Installer
+			::EncryptedHomeProvisioner::Provision(*homePartition,
+				targetDirectory.Path(), fEncryptedHomeOptions);
+		if (!provisioned.has_value())
+			return _InstallationError(provisioned.error());
+		provisionedEncryptedHome = *provisioned;
 	}
+#endif
+	auto installationError = [&](status_t error) {
+#ifdef ENCRYPTED_HOME_AVAILABLE
+		if (provisionedEncryptedHome.has_value())
+			provisionedEncryptedHome->Cleanup();
+#endif
+		return _InstallationError(error);
+	};
+
+	// Begin actual installation
+
+	err = [&]() -> status_t {
+		ProgressReporter reporter(fOwner, new BMessage(MSG_STATUS_MESSAGE));
+		EntryFilter entryFilter(srcDirectory.Path());
+		CopyEngine engine(&reporter, &entryFilter);
+		BList unzipEngines;
+
+		status_t error = _CreateAndMirrorIndices(srcDirectory, targetDirectory);
+		if (error != B_OK)
+			return error;
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+		if (provisionedEncryptedHome.has_value()) {
+			BPath sourceHome(srcDirectory.Path(), "home");
+			error = sourceHome.InitCheck();
+			if (error != B_OK)
+				return error;
+			error = _CreateAndMirrorIndices(sourceHome,
+				provisionedEncryptedHome->mountPoint);
+			if (error != B_OK)
+				return error;
+		}
+#endif
+
+		// Let the engine collect information for the progress bar later on
+		engine.ResetTargets(srcDirectory.Path());
+		error = engine.CollectTargets(srcDirectory.Path(), fCancelSemaphore);
+		if (error != B_OK)
+			return error;
+
+		// Collect selected packages also
+		if (fPackages) {
+			int32 count = fPackages->CountItems();
+			for (int32 i = 0; i < count; i++) {
+				Package *p = static_cast<Package*>(fPackages->ItemAt(i));
+				const BPath& pkgPath = p->Path();
+				error = pkgPath.InitCheck();
+				if (error != B_OK)
+					return error;
+				error = engine.CollectTargets(pkgPath.Path(), fCancelSemaphore);
+				if (error != B_OK)
+					return error;
+			}
+		}
+
+		// collect information about all zip packages
+		error = _ProcessZipPackages(srcDirectory.Path(), targetDirectory.Path(),
+			&reporter, unzipEngines);
+		if (error != B_OK)
+			return error;
+
+		reporter.StartTimer();
+
+		// copy source volume
+		error = engine.Copy(srcDirectory.Path(), targetDirectory.Path(),
+			fCancelSemaphore);
+		if (error != B_OK)
+			return error;
+
+		// copy selected packages
+		if (fPackages) {
+			int32 count = fPackages->CountItems();
+			// FIXME: find_directory doesn't return the folder in the target
+			// volume, so we are hard coding this for now.
+			BPath targetPkgDir(targetDirectory.Path(), "system/packages");
+			error = targetPkgDir.InitCheck();
+			if (error != B_OK)
+				return error;
+			for (int32 i = 0; i < count; i++) {
+				Package *p = static_cast<Package*>(fPackages->ItemAt(i));
+				const BPath& pkgPath = p->Path();
+				error = pkgPath.InitCheck();
+				if (error != B_OK)
+					return error;
+				BPath targetPath(targetPkgDir.Path(), pkgPath.Leaf());
+				error = targetPath.InitCheck();
+				if (error != B_OK)
+					return error;
+				error = engine.Copy(pkgPath.Path(), targetPath.Path(),
+					fCancelSemaphore);
+				if (error != B_OK)
+					return error;
+			}
+		}
+
+		// Extract all zip packages. If an error occured, delete the rest of
+		// the engines, but stop extracting.
+		for (int32 i = 0; i < unzipEngines.CountItems(); i++) {
+			UnzipEngine* engine = reinterpret_cast<UnzipEngine*>(
+				unzipEngines.ItemAtFast(i));
+			if (error == B_OK)
+				error = engine->UnzipPackage();
+			delete engine;
+		}
+		return error;
+	}();
 	if (err != B_OK)
-		return _InstallationError(err);
+		return installationError(err);
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	if (provisionedEncryptedHome.has_value()) {
+		err = BPrivate::EncryptedHome::Installer::EncryptedHomeProvisioner
+			::WriteSettings(targetDirectory.Path(), *provisionedEncryptedHome);
+		if (err != B_OK)
+			return installationError(err);
+	} else {
+		err = BPrivate::EncryptedHome::Installer::EncryptedHomeProvisioner
+			::RemoveSettings(targetDirectory.Path());
+		if (err != B_OK)
+			return installationError(err);
+	}
+#endif
 
 	err = _WriteBootSector(targetDirectory);
 	if (err != B_OK)
-		return _InstallationError(err);
+		return installationError(err);
 
 	err = _LaunchFinishScript(targetDirectory);
 	if (err != B_OK)
-		return _InstallationError(err);
+		return installationError(err);
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	if (provisionedEncryptedHome.has_value()) {
+		provisionedEncryptedHome->Cleanup();
+		provisionedEncryptedHome.reset();
+	}
+#endif
 
 	fOwner.SendMessage(MSG_INSTALL_FINISHED);
 	return B_OK;
@@ -773,6 +1013,22 @@ WorkerThread::_InstallationError(status_t error)
 	ERR("_PerformInstall failed");
 	fOwner.SendMessage(&statusMessage);
 	return error;
+}
+
+
+status_t
+WorkerThread::_CreateAndMirrorIndices(const BPath& sourceDirectory,
+	const BPath& targetDirectory) const
+{
+	// Create the default indices which should always be present on a proper
+	// BFS volume. We don't care if the source volume does not have them.
+	status_t status = _CreateDefaultIndices(targetDirectory);
+	if (status != B_OK)
+		return status;
+
+	// Mirror all the indices which are present on the source volume onto
+	// the target volume.
+	return _MirrorIndices(sourceDirectory, targetDirectory);
 }
 
 
@@ -863,6 +1119,32 @@ WorkerThread::_CreateDefaultIndices(const BPath& targetDirectory) const
 
 	return B_OK;
 }
+
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+status_t
+WorkerThread::_CollectEncryptedHomeBytes(const BPath& sourceDirectory,
+	off_t& bytes) const
+{
+	bytes = 0;
+
+	BPath sourceHome(sourceDirectory.Path(), "home");
+	status_t ret = sourceHome.InitCheck();
+	if (ret != B_OK)
+		return ret;
+
+	BEntry homeEntry(sourceHome.Path());
+	ret = homeEntry.InitCheck();
+	if (ret != B_OK)
+		return ret;
+	if (!homeEntry.Exists())
+		return B_OK;
+
+	EntryFilter filter(sourceDirectory.Path());
+	BString sourceRoot(sourceDirectory.Path());
+	return CollectCopyBytes(sourceRoot, filter, homeEntry, bytes);
+}
+#endif
 
 
 status_t
@@ -1064,6 +1346,79 @@ TargetVisitor::Visit(BPartition *partition, int32 level)
 	fMenu->AddItem(item);
 	return false;
 }
+
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+// #pragma mark - HomeVisitor
+
+
+HomeVisitor::HomeVisitor(BMenu* menu, BMenu* sourceMenu,
+	partition_id bootPartitionID)
+	:
+	fMenu(menu),
+	fSourceMenu(sourceMenu),
+	fBootPartitionID(bootPartitionID)
+{
+}
+
+
+bool
+HomeVisitor::Visit(BDiskDevice* device)
+{
+	if (device->IsReadOnlyMedia())
+		return false;
+	return Visit(device, 0);
+}
+
+
+bool
+HomeVisitor::Visit(BPartition* partition, int32 level)
+{
+	if (partition->Size() < 20 * 1024 * 1024)
+		return false;
+	if (partition->CountChildren() > 0)
+		return false;
+	if (partition->IsReadOnly())
+		return false;
+	if (partition->ID() == fBootPartitionID)
+		return false;
+	if (_IsInstallSource(partition->ID()))
+		return false;
+	if (partition->IsMounted())
+		return false;
+
+	bool isValidTarget = BPrivate::EncryptedHome::Installer
+		::EncryptedHomeProvisioner::IsSafeBackingContent(partition->Status(),
+			partition->ContainsFileSystem(),
+			partition->ContainsPartitioningSystem(), partition->ContentType());
+
+	char label[255];
+	char menuLabel[255];
+	make_partition_label(partition, label, menuLabel, !isValidTarget, false);
+	PartitionMenuItem* item = new PartitionMenuItem(partition->ContentName(),
+		label, menuLabel, new BMessage(HOME_PARTITION), partition->ID());
+	item->SetIsValidTarget(isValidTarget);
+	fMenu->AddItem(item);
+	return false;
+}
+
+
+bool
+HomeVisitor::_IsInstallSource(partition_id id) const
+{
+	if (fSourceMenu == NULL)
+		return false;
+
+	for (int32 i = fSourceMenu->CountItems() - 1; i >= 0; i--) {
+		PartitionMenuItem* item
+			= (PartitionMenuItem*)fSourceMenu->ItemAt(i);
+		if (item->ID() == id)
+			return true;
+	}
+
+	return false;
+}
+#endif
 
 
 // #pragma mark - EFIVisitor

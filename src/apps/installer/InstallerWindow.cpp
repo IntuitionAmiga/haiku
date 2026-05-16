@@ -47,6 +47,14 @@
 #include "PartitionMenuItem.h"
 #include "WorkerThread.h"
 
+#ifdef ENCRYPTED_HOME_AVAILABLE
+#	include "EncryptedHomeProvisioner.h"
+#	include <CheckBox.h>
+#	include <RadioButton.h>
+#	include <TextControl.h>
+#	include <encrypted_home_disk_system.h>
+#endif
+
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "InstallerWindow"
@@ -62,6 +70,9 @@ const uint32 LAUNCH_BOOTMAN = 'iWBM';
 const uint32 START_SCAN = 'iSSC';
 const uint32 PACKAGE_CHECKBOX = 'iPCB';
 const uint32 ENCOURAGE_DRIVESETUP = 'iENC';
+#ifdef ENCRYPTED_HOME_AVAILABLE
+const uint32 ENCRYPT_HOME_CHANGED = 'iEHC';
+#endif
 
 
 class LogoView : public BView {
@@ -215,6 +226,10 @@ InstallerWindow::InstallerWindow()
 		true, false);
 	fSrcMenu = new BPopUpMenu(B_TRANSLATE("scanning" B_UTF8_ELLIPSIS),
 		true, false);
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	fHomeMenu = new BPopUpMenu(B_TRANSLATE("scanning" B_UTF8_ELLIPSIS),
+		true, false);
+#endif
 
 	fSrcMenuField = new BMenuField("srcMenuField",
 		B_TRANSLATE("Install from:"), fSrcMenu);
@@ -223,6 +238,32 @@ InstallerWindow::InstallerWindow()
 	fDestMenuField = new BMenuField("destMenuField", B_TRANSLATE("Onto:"),
 		fDestMenu);
 	fDestMenuField->SetAlignment(B_ALIGN_RIGHT);
+
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	fHomeMenuField = new BMenuField("homeMenuField",
+		B_TRANSLATE("Home backing partition:"), fHomeMenu);
+	fHomeMenuField->SetAlignment(B_ALIGN_RIGHT);
+
+	fEncryptHomeCheckBox = new BCheckBox("encryptHome",
+		B_TRANSLATE("Encrypt home folder"),
+		new BMessage(ENCRYPT_HOME_CHANGED));
+	fPassphraseControl = new BTextControl("homePassphrase",
+		B_TRANSLATE("Passphrase:"), "", new BMessage(ENCRYPT_HOME_CHANGED));
+	fPassphraseControl->SetModificationMessage(
+		new BMessage(ENCRYPT_HOME_CHANGED));
+	fPassphraseControl->TextView()->HideTyping(true);
+	fPassphraseConfirmControl = new BTextControl("homePassphraseConfirm",
+		B_TRANSLATE("Confirm passphrase:"), "",
+		new BMessage(ENCRYPT_HOME_CHANGED));
+	fPassphraseConfirmControl->SetModificationMessage(
+		new BMessage(ENCRYPT_HOME_CHANGED));
+	fPassphraseConfirmControl->TextView()->HideTyping(true);
+	fCipherAES128Button = new BRadioButton("cipherAES128",
+		B_TRANSLATE("AES-128 XTS"), new BMessage(ENCRYPT_HOME_CHANGED));
+	fCipherAES256Button = new BRadioButton("cipherAES256",
+		B_TRANSLATE("AES-256 XTS"), new BMessage(ENCRYPT_HOME_CHANGED));
+	fCipherAES256Button->SetValue(B_CONTROL_ON);
+#endif
 
 	fPackagesSwitch = new PaneSwitch("options_button");
 	fPackagesSwitch->SetLabels(B_TRANSLATE("Hide optional packages"),
@@ -289,8 +330,21 @@ InstallerWindow::InstallerWindow()
 			.AddGrid(new BGridView(B_USE_ITEM_SPACING, B_USE_ITEM_SPACING))
 				.AddMenuField(fSrcMenuField, 0, 0)
 				.AddMenuField(fDestMenuField, 0, 1)
+#ifdef ENCRYPTED_HOME_AVAILABLE
+				.Add(fEncryptHomeCheckBox, 1, 2)
+				.AddMenuField(fHomeMenuField, 0, 3)
+				.Add(fPassphraseControl->CreateLabelLayoutItem(), 0, 4)
+				.Add(fPassphraseControl->CreateTextViewLayoutItem(), 1, 4)
+				.Add(fPassphraseConfirmControl->CreateLabelLayoutItem(), 0, 5)
+				.Add(fPassphraseConfirmControl->CreateTextViewLayoutItem(), 1, 5)
+				.Add(fCipherAES128Button, 1, 6)
+				.Add(fCipherAES256Button, 1, 7)
+				.AddGlue(2, 0, 1, 8)
+				.Add(BSpaceLayoutItem::CreateVerticalStrut(5), 0, 8, 3)
+#else
 				.AddGlue(2, 0, 1, 2)
 				.Add(BSpaceLayoutItem::CreateVerticalStrut(5), 0, 2, 3)
+#endif
 			.End()
 			.Add(packagesGroup)
 			.AddGroup(B_HORIZONTAL, B_USE_WINDOW_SPACING)
@@ -384,6 +438,43 @@ InstallerWindow::MessageReceived(BMessage *msg)
 					if (srcItem == NULL || targetItem == NULL)
 						break;
 
+#ifdef ENCRYPTED_HOME_AVAILABLE
+					PartitionMenuItem* homeItem
+						= (PartitionMenuItem*)fHomeMenu->FindMarked();
+					BPrivate::EncryptedHome::Installer
+						::EncryptedHomeInstallOptions encryptedHomeOptions;
+					encryptedHomeOptions.enabled
+						= fEncryptHomeCheckBox->Value() == B_CONTROL_ON;
+					encryptedHomeOptions.sourcePartitionID = srcItem->ID();
+					encryptedHomeOptions.targetPartitionID = targetItem->ID();
+					encryptedHomeOptions.homePartitionID
+						= homeItem != NULL ? homeItem->ID() : -1;
+					encryptedHomeOptions.cipherId = fCipherAES128Button->Value()
+						== B_CONTROL_ON
+							? BPrivate::EncryptedHome
+								::kEncryptedHomeCipherAES128XTS
+							: BPrivate::EncryptedHome
+								::kEncryptedHomeCipherAES256XTS;
+					encryptedHomeOptions.passphrase = {
+						reinterpret_cast<const std::byte*>(
+							fPassphraseControl->Text()),
+						strlen(fPassphraseControl->Text())
+					};
+					encryptedHomeOptions.confirmation = {
+						reinterpret_cast<const std::byte*>(
+							fPassphraseConfirmControl->Text()),
+						strlen(fPassphraseConfirmControl->Text())
+					};
+					if (BPrivate::EncryptedHome::Installer
+							::EncryptedHomeProvisioner::Validate(
+								encryptedHomeOptions) != B_OK) {
+						_SetStatusMessage(B_TRANSLATE("Encrypted home "
+							"requires a separate home partition and matching "
+							"non-empty passphrases."));
+						break;
+					}
+#endif
+
 					_SetCopyEngineCancelSemaphore(create_sem(1,
 						"copy engine cancel"));
 
@@ -394,8 +485,13 @@ InstallerWindow::MessageReceived(BMessage *msg)
 					fWorkerThread->SetPackagesList(list);
 					fWorkerThread->SetSpaceRequired(size);
 					fInstallStatus = kInstalling;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+					fWorkerThread->StartInstall(srcItem->ID(),
+						targetItem->ID(), encryptedHomeOptions);
+#else
 					fWorkerThread->StartInstall(srcItem->ID(),
 						targetItem->ID());
+#endif
 					fBeginButton->SetLabel(B_TRANSLATE("Stop"));
 					_DisableInterface(true);
 
@@ -429,6 +525,12 @@ InstallerWindow::MessageReceived(BMessage *msg)
 		case TARGET_PARTITION:
 			_UpdateControls();
 			break;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+		case HOME_PARTITION:
+		case ENCRYPT_HOME_CHANGED:
+			_UpdateControls();
+			break;
+#endif
 		case EFI_PARTITION:
 		{
 			partition_id id;
@@ -740,6 +842,19 @@ InstallerWindow::_DisableInterface(bool disable)
 	fMakeBootableItem->SetEnabled(!disable);
 	fSrcMenuField->SetEnabled(!disable);
 	fDestMenuField->SetEnabled(!disable);
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	fEncryptHomeCheckBox->SetEnabled(!disable);
+	fHomeMenuField->SetEnabled(!disable && fEncryptHomeCheckBox->Value()
+		== B_CONTROL_ON);
+	fPassphraseControl->SetEnabled(!disable && fEncryptHomeCheckBox->Value()
+		== B_CONTROL_ON);
+	fPassphraseConfirmControl->SetEnabled(!disable
+		&& fEncryptHomeCheckBox->Value() == B_CONTROL_ON);
+	fCipherAES128Button->SetEnabled(!disable && fEncryptHomeCheckBox->Value()
+		== B_CONTROL_ON);
+	fCipherAES256Button->SetEnabled(!disable && fEncryptHomeCheckBox->Value()
+		== B_CONTROL_ON);
+#endif
 }
 
 
@@ -753,10 +868,20 @@ InstallerWindow::_ScanPartitions()
 		delete item;
 	while ((item = fDestMenu->RemoveItem((int32)0)))
 		delete item;
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	while ((item = fHomeMenu->RemoveItem((int32)0)))
+		delete item;
+#endif
 	while ((item = fEFILoaderMenu->RemoveItem((int32)0)))
 		delete item;
 
-	fWorkerThread->ScanDisksPartitions(fSrcMenu, fDestMenu, fEFILoaderMenu);
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	fWorkerThread->ScanDisksPartitions(fSrcMenu, fDestMenu, fEFILoaderMenu,
+		fHomeMenu);
+#else
+	fWorkerThread->ScanDisksPartitions(fSrcMenu, fDestMenu, fEFILoaderMenu,
+		NULL);
+#endif
 
 	if (fSrcMenu->ItemAt(0) != NULL)
 		_PublishPackages();
@@ -820,6 +945,29 @@ InstallerWindow::_UpdateControls()
 	}
 	fDestMenuField->MenuItem()->SetLabel(label.String());
 
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	bool encryptHome = fEncryptHomeCheckBox->Value() == B_CONTROL_ON;
+	for (int32 i = fHomeMenu->CountItems() - 1; i >= 0; i--) {
+		PartitionMenuItem* homeItem
+			= (PartitionMenuItem*)fHomeMenu->ItemAt(i);
+		if ((srcItem != NULL && homeItem->ID() == srcItem->ID())
+			|| (dstItem != NULL && homeItem->ID() == dstItem->ID())) {
+			homeItem->SetEnabled(false);
+			homeItem->SetMarked(false);
+		} else
+			homeItem->SetEnabled(homeItem->IsValidTarget());
+	}
+
+	PartitionMenuItem* homeItem = (PartitionMenuItem*)fHomeMenu->FindMarked();
+	if (homeItem != NULL)
+		label = homeItem->MenuLabel();
+	else if (fHomeMenu->CountItems() == 0)
+		label = B_TRANSLATE_COMMENT("<none>", "No partition available");
+	else
+		label = B_TRANSLATE("Please choose home partition");
+	fHomeMenuField->MenuItem()->SetLabel(label.String());
+#endif
+
 	BString statusText;
 	if (srcItem != NULL && dstItem != NULL) {
 		statusText.SetToFormat(B_TRANSLATE("Press the 'Begin' button to install "
@@ -862,7 +1010,34 @@ InstallerWindow::_UpdateControls()
 
 	fInstallStatus = kReadyForInstall;
 	fBeginButton->SetLabel(B_TRANSLATE("Begin"));
+#ifdef ENCRYPTED_HOME_AVAILABLE
+	bool encryptedHomeReady = true;
+	if (encryptHome) {
+		encryptedHomeReady = homeItem != NULL
+			&& strlen(fPassphraseControl->Text()) > 0
+			&& strcmp(fPassphraseControl->Text(),
+				fPassphraseConfirmControl->Text()) == 0;
+		if (homeItem == NULL) {
+			_SetStatusMessage(B_TRANSLATE("Encrypted home requires a separate "
+				"home partition. Open DriveSetup, create one, then return."));
+		} else if (strlen(fPassphraseControl->Text()) == 0) {
+			_SetStatusMessage(B_TRANSLATE("Enter a passphrase for the "
+				"encrypted home folder."));
+		} else if (strcmp(fPassphraseControl->Text(),
+				fPassphraseConfirmControl->Text()) != 0) {
+			_SetStatusMessage(B_TRANSLATE("The encrypted home passphrases do "
+				"not match."));
+		}
+	}
+	fBeginButton->SetEnabled(srcItem && dstItem && encryptedHomeReady);
+	fHomeMenuField->SetEnabled(encryptHome);
+	fPassphraseControl->SetEnabled(encryptHome);
+	fPassphraseConfirmControl->SetEnabled(encryptHome);
+	fCipherAES128Button->SetEnabled(encryptHome);
+	fCipherAES256Button->SetEnabled(encryptHome);
+#else
 	fBeginButton->SetEnabled(srcItem && dstItem);
+#endif
 
 	// adjust "Write Boot Sector" and "Set up boot menu" buttons
 	if (dstItem != NULL) {
@@ -996,5 +1171,3 @@ InstallerWindow::_ComparePackages(const void* firstArg, const void* secondArg)
 		return 1;
 	return strcmp(package1->Name(), package2->Name());
 }
-
-

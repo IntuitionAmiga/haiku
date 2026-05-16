@@ -2,8 +2,7 @@ SubDir HAIKU_TOP src tests bin cryptvol ;
 
 include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
 
-if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS)
-		&& [ FIsBuildFeatureEnabled openssl ] {
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
 	SimpleTest CryptvolCliTest :
 		CryptvolCliTest.cpp
 		:

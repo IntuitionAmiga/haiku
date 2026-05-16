@@ -1,13 +1,58 @@
 SubDir HAIKU_TOP src apps installer ;
 
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
 UsePrivateHeaders interface shared storage tracker ;
 UsePrivateSystemHeaders ;
 
 SubDirHdrs [ FDirName $(HAIKU_TOP) src kits tracker ] ;
 SubDirHdrs [ FDirName $(HAIKU_TOP) src servers launch ] ;
 
+local encryptedHomeSources ;
+local encryptedHomeLibs ;
+local encryptedHomeDepends ;
+local encryptedHomeCatalogSources ;
+
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
+	UsePrivateHeaders encrypted_home ;
+	UseBuildFeatureHeaders openssl ;
+
+	encryptedHomeSources = EncryptedHomeProvisioner.cpp ;
+	encryptedHomeCatalogSources = EncryptedHomeProvisioner.cpp ;
+	encryptedHomeLibs =
+		[ TargetLibsupc++ ]
+		[ BuildFeatureAttribute openssl : libraries ]
+		[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ] ;
+	encryptedHomeDepends =
+		std_probe
+		[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ] ;
+
+	ObjectC++Flags [ FGristFiles EncryptedHomeProvisioner.o ] :
+		-std=c++23 -DENCRYPTED_HOME_AVAILABLE
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+		-Wno-old-style-cast -Wno-shadow -Wno-conversion
+	;
+
+	ObjectC++Flags [ FGristFiles InstallerApp.o InstallerWindow.o
+		WorkerThread.o ] :
+		-std=c++23 -DENCRYPTED_HOME_AVAILABLE
+	;
+
+	Includes [ FGristFiles EncryptedHomeProvisioner.cpp
+		EncryptedHomeProvisioner.o WorkerThread.cpp WorkerThread.o
+		InstallerWindow.cpp InstallerWindow.o ] :
+		[ BuildFeatureAttribute openssl : headers ] ;
+}
+
 Application Installer :
 	CopyEngine.cpp
+	$(encryptedHomeSources)
 	EULAWindow.cpp
 	InstallerApp.cpp
 	InstallerDefs.cpp
@@ -22,9 +67,12 @@ Application Installer :
 	Utility.cpp
 
 	: be tracker translation shared [ TargetLibstdc++ ]
+		$(encryptedHomeLibs)
 		localestub package
 	: Installer.rdef
 ;
+
+Depends Installer : $(encryptedHomeDepends) ;
 
 SEARCH on <src!apps!installer>Utility.cpp = [
 	FDirName $(HAIKU_TOP) src servers launch ] ;
@@ -34,6 +82,7 @@ DoCatalogs Installer :
 	:
 	EULAWindow.cpp
 	InstallerApp.cpp
+	$(encryptedHomeCatalogSources)
 	InstallerWindow.cpp
 	PackageViews.cpp
 	ProgressReporter.cpp

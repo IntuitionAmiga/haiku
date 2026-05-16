@@ -2,8 +2,7 @@ SubDir HAIKU_TOP src libs encrypted_home ;
 
 include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
 
-if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS)
-		&& [ FIsBuildFeatureEnabled openssl ] {
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
 	UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
 	UseHeaders [ FDirName $(HAIKU_TOP) src libs phc_argon2 ] : true ;
 	UseHeaders [ FDirName $(HAIKU_TOP) src libs openbsd_softraid_crypto ] : true ;
@@ -16,8 +15,8 @@ if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS)
 
 	Depends [ MultiArchDefaultGristFiles libencrypted_home_userland.a ] :
 		std_probe
-		libopenbsd_softraid_crypto.a
-		libphc_argon2.a
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ]
 	;
 
 	ObjectC++Flags

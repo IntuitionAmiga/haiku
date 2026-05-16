@@ -2,8 +2,7 @@ SubDir HAIKU_TOP src bin cryptvol ;
 
 include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
 
-if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS)
-		&& [ FIsBuildFeatureEnabled openssl ] {
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
 	UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
 	UseHeaders [ FDirName $(HAIKU_TOP) src libs encrypted_home ] : true ;
 	UseHeaders [ FDirName $(HAIKU_TOP) src libs phc_argon2 ] : true ;

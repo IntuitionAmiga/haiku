@@ -15,9 +15,9 @@ UnitTestLib libencrypted_home_test.so :
 	[ TargetLibsupc++ ]
 	[ BuildFeatureAttribute openssl : libraries ]
 	:
-	libencrypted_home_userland.a
-	libopenbsd_softraid_crypto.a
-	libphc_argon2.a
+	[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+	[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+	[ MultiArchDefaultGristFiles libphc_argon2.a ]
 ;
 
 ObjectC++Flags

@@ -12,6 +12,7 @@
 const uint32 SOURCE_PARTITION = 'iSPT';
 const uint32 TARGET_PARTITION = 'iTPT';
 const uint32 EFI_PARTITION = 'iEPT';
+const uint32 HOME_PARTITION = 'iHOM';
 
 
 class PartitionMenuItem : public BMenuItem {

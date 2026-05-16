@@ -7,10 +7,8 @@ SubInclude HAIKU_TOP src tests libs linprog ;
 
 include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
 
-if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS) {
-	if [ FIsBuildFeatureEnabled openssl ] {
-		SubInclude HAIKU_TOP src tests libs encrypted_home ;
-	}
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
+	SubInclude HAIKU_TOP src tests libs encrypted_home ;
 	SubInclude HAIKU_TOP src tests libs openbsd_softraid_crypto ;
 	SubInclude HAIKU_TOP src tests libs phc_argon2 ;
 }

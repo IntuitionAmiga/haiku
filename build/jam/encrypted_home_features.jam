@@ -4,6 +4,12 @@
 # provenance notes and machine-specific probe logs live outside the repository.
 
 ENCRYPTED_HOME_SUPPORTED_ARCHS = x86_64 riscv64 ;
+ENCRYPTED_HOME_BUILD_ENABLED = ;
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS) {
+	if [ FIsBuildFeatureEnabled openssl ] {
+		ENCRYPTED_HOME_BUILD_ENABLED = 1 ;
+	}
+}
 
 ENCRYPTED_HOME_USERLAND_CXX_STANDARD = c++23 ;
 ENCRYPTED_HOME_USERLAND_HAS_STD_EXPECTED = 1 ;
