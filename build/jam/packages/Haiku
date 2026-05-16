@@ -80,6 +80,8 @@ AddFilesToPackage add-ons kernel debugger :
 	;
 AddFilesToPackage add-ons kernel file_systems
 	: $(SYSTEM_ADD_ONS_FILE_SYSTEMS) ;
+AddFilesToPackage add-ons kernel file_systems
+	: <file_system>encrypted_home@x86_64,riscv64 ;
 AddFilesToPackage add-ons kernel generic :
 	ata_adapter
 	bios@x86,x86_64
@@ -454,6 +456,7 @@ AddFilesToPackage add-ons disk_systems :
 	<disk_system>intel
 	<disk_system>gpt
 	<disk_system>bfs
+	<disk_system>encrypted_home@x86_64,riscv64
 	<disk_system>ntfs
 	;
 

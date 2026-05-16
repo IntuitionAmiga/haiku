@@ -49,6 +49,8 @@ AddFilesToPackage add-ons kernel debugger :
 	<kdebug>run_on_exit
 	;
 AddFilesToPackage add-ons kernel file_systems : $(SYSTEM_ADD_ONS_FILE_SYSTEMS) ;
+AddFilesToPackage add-ons kernel file_systems :
+	<file_system>encrypted_home@x86_64,riscv64 ;
 AddFilesToPackage add-ons kernel generic :
 	ata_adapter
 	bios@x86,x86_64

@@ -1,0 +1,12 @@
+SubDir HAIKU_TOP src tests add-ons disk_systems encrypted_home ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS) {
+	UsePrivateHeaders encrypted_home ;
+
+	SimpleTest EncryptedHomeDiskSystemTest
+		: EncryptedHomeDiskSystemTest.cpp
+		: be [ TargetLibstdc++ ]
+	;
+}

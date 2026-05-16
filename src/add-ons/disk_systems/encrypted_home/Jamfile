@@ -1,0 +1,23 @@
+SubDir HAIKU_TOP src add-ons disk_systems encrypted_home ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS) {
+	UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
+	UsePrivateHeaders shared storage ;
+
+	Addon <disk_system>encrypted_home :
+		EncryptedHomeAddOn.cpp
+		: be [ TargetLibsupc++ ] shared
+	;
+
+	Depends <disk_system>encrypted_home : std_probe ;
+
+	ObjectC++Flags [ FGristFiles EncryptedHomeAddOn.o ] :
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor
+		-Wno-pedantic -Wno-old-style-cast
+	;
+}
