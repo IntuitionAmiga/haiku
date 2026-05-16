@@ -1,0 +1,23 @@
+SubDir HAIKU_TOP src tests bin cryptvol ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS)
+		&& [ FIsBuildFeatureEnabled openssl ] {
+	SimpleTest CryptvolCliTest :
+		CryptvolCliTest.cpp
+		:
+		be
+		[ TargetLibstdc++ ]
+		[ TargetLibsupc++ ]
+	;
+
+	ObjectC++Flags [ FGristFiles CryptvolCliTest.o ] :
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+	;
+
+	Depends CryptvolCliTest : cryptvol ;
+}

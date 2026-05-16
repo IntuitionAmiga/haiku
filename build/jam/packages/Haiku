@@ -130,6 +130,7 @@ AddNewDriversToPackage disk scsi :
 	scsi_disk
 	;
 AddNewDriversToPackage disk virtual :
+	encrypted_home@x86_64,riscv64
 	ram_disk
 	#virtio_block
 	;
@@ -238,6 +239,9 @@ AddFilesToPackage bin :
 	$(SYSTEM_BIN)
 	consoled
 	;
+if [ FIsBuildFeatureEnabled openssl ] {
+	AddFilesToPackage bin : cryptvol@x86_64,riscv64 ;
+}
 AddFilesToPackage apps
 	: $(SYSTEM_APPS) ;
 AddFilesToPackage preferences

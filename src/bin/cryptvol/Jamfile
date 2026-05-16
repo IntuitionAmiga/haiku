@@ -1,0 +1,40 @@
+SubDir HAIKU_TOP src bin cryptvol ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS)
+		&& [ FIsBuildFeatureEnabled openssl ] {
+	UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
+	UseHeaders [ FDirName $(HAIKU_TOP) src libs encrypted_home ] : true ;
+	UseHeaders [ FDirName $(HAIKU_TOP) src libs phc_argon2 ] : true ;
+	UseHeaders [ FDirName $(HAIKU_TOP) src libs openbsd_softraid_crypto ] : true ;
+	UseBuildFeatureHeaders openssl ;
+
+	Application cryptvol :
+		main.cpp
+		:
+		[ TargetLibstdc++ ]
+		[ TargetLibsupc++ ]
+		[ BuildFeatureAttribute openssl : libraries ]
+		[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ]
+	;
+
+	Depends cryptvol :
+		std_probe
+		[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ]
+	;
+
+	ObjectC++Flags [ FGristFiles main.o ] :
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+	;
+
+	Includes [ FGristFiles main.cpp ] :
+		[ BuildFeatureAttribute openssl : headers ] ;
+}

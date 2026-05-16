@@ -1,0 +1,25 @@
+SubDir HAIKU_TOP src tests add-ons kernel drivers disk virtual encrypted_home ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(HAIKU_PACKAGING_ARCH) in $(ENCRYPTED_HOME_SUPPORTED_ARCHS) {
+	UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
+
+	SimpleTest EncryptedHomeDriverTest :
+		EncryptedHomeDriverTest.cpp
+		:
+		libkernelland_emu.so
+		be
+		[ TargetLibstdc++ ]
+	;
+
+	ObjectC++Flags EncryptedHomeDriverTest.cpp :
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor
+		-Wno-pedantic -Wno-shadow
+		;
+
+	Depends EncryptedHomeDriverTest : encrypted_home ;
+}
