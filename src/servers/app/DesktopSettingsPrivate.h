@@ -29,6 +29,9 @@ public:
 
 			bool				DidLoadFontSettings() const
 									{ return fFontSettingsLoadStatus == B_OK; }
+			bool				IsBootstrap() const
+									{ return fBootstrap; }
+			status_t			Reload();
 			status_t			Save(uint32 mask = kAllSettings);
 
 			void				SetDefaultPlainFont(const ServerFont& font);
@@ -105,6 +108,7 @@ private:
 									int32& rows) const;
 
 			status_t			fFontSettingsLoadStatus;
+			bool				fBootstrap;
 
 			ServerFont			fPlainFont;
 			ServerFont			fBoldFont;

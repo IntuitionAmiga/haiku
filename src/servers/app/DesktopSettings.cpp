@@ -33,6 +33,8 @@
 
 DesktopSettingsPrivate::DesktopSettingsPrivate(server_read_only_memory* shared)
 	:
+	fFontSettingsLoadStatus(B_OK),
+	fBootstrap(false),
 	fShared(*shared)
 {
 	// if the on-disk settings are not complete, the defaults will be kept
@@ -49,6 +51,8 @@ DesktopSettingsPrivate::~DesktopSettingsPrivate()
 void
 DesktopSettingsPrivate::_SetDefaults()
 {
+	fFontSettingsLoadStatus = B_ENTRY_NOT_FOUND;
+
 	fPlainFont = *gFontManager->DefaultPlainFont();
 	fBoldFont = *gFontManager->DefaultBoldFont();
 	fFixedFont = *gFontManager->DefaultFixedFont();
@@ -114,8 +118,13 @@ DesktopSettingsPrivate::_Load()
 
 	BPath basePath;
 	status_t status = _GetPath(basePath);
-	if (status < B_OK)
-		return status;
+	if (status < B_OK) {
+		fBootstrap = true;
+		fFontSettingsLoadStatus = status;
+		return B_OK;
+	}
+
+	fBootstrap = false;
 
 	// read workspaces settings
 
@@ -157,6 +166,8 @@ DesktopSettingsPrivate::_Load()
 		if (status != B_OK) {
 			fFontSettingsLoadStatus = status;
 		} else if (gFontManager->Lock()) {
+			fFontSettingsLoadStatus = B_OK;
+
 			const char* family;
 			const char* style;
 			float size;
@@ -336,6 +347,14 @@ DesktopSettingsPrivate::_Load()
 	}
 
 	return B_OK;
+}
+
+
+status_t
+DesktopSettingsPrivate::Reload()
+{
+	_SetDefaults();
+	return _Load();
 }
 
 
@@ -976,6 +995,20 @@ DesktopSettings::ControlLook() const
 	return fSettings->ControlLook();
 }
 
+
+bool
+DesktopSettings::IsBootstrap() const
+{
+	return fSettings->IsBootstrap();
+}
+
+
+status_t
+DesktopSettings::Reload()
+{
+	return fSettings->Reload();
+}
+
 //	#pragma mark - write access
 
 
@@ -1102,4 +1135,3 @@ LockedDesktopSettings::SetControlLook(const char* path)
 {
 	return fSettings->SetControlLook(path);
 }
-

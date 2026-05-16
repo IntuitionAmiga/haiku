@@ -142,11 +142,27 @@ AppServer::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case AS_HOME_SETTINGS_RELOADED:
+			_ReloadHomeSettings();
+			break;
+
 		default:
 			// We don't allow application scripting
 			STRACE(("AppServer received unexpected code %" B_PRId32 "\n",
 				message->what));
 			break;
+	}
+}
+
+
+void
+AppServer::_ReloadHomeSettings()
+{
+	BAutolock locker(fDesktopLock);
+
+	for (int32 i = 0; i < fDesktops.CountItems(); i++) {
+		if (Desktop* desktop = fDesktops.ItemAt(i))
+			desktop->ReloadHomeSettings();
 	}
 }
 

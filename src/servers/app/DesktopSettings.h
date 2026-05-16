@@ -77,6 +77,8 @@ public:
 			bool				IsSubpixelOrderingRegular() const;
 
 			const BString&		ControlLook() const;
+			bool				IsBootstrap() const;
+			status_t			Reload();
 
 protected:
 			DesktopSettingsPrivate*	fSettings;

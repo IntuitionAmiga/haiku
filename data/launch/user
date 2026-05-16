@@ -1,6 +1,7 @@
 service x-vnd.Haiku-app_server {
 	env /system/boot/SetupEnvironment
 	launch /system/servers/app_server
+	if not file_exists /system/apps/unlock_volume
 }
 
 target desktop {

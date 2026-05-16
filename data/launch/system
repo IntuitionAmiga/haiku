@@ -24,6 +24,20 @@ service x-vnd.Haiku-mount_server {
 	launch /system/servers/mount_server
 }
 
+service x-vnd.Haiku-app_server {
+	env /system/boot/SetupEnvironment
+	launch /system/servers/app_server
+	if file_exists /system/apps/unlock_volume
+}
+
+job x-vnd.Haiku-home_unlock {
+	launch /system/apps/unlock_volume
+	if file_exists /system/apps/unlock_volume
+	requires x-vnd.Haiku-app_server
+	wait_for_exit
+	on initial_volumes_mounted
+}
+
 service x-vnd.Haiku-media_server {
 	launch /system/servers/media_server
 	no_safemode
@@ -68,6 +82,13 @@ job x-vnd.Haiku-cddb_lookup {
 }
 
 # target login
+job x-vnd.Haiku-autologin-unlocked {
+	launch /system/bin/autologin
+	if file_exists /system/apps/unlock_volume
+	requires x-vnd.Haiku-home_unlock
+}
+
 job x-vnd.Haiku-autologin {
 	launch /system/bin/autologin
+	if not file_exists /system/apps/unlock_volume
 }

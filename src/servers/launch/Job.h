@@ -53,6 +53,9 @@ public:
 			bool				IsService() const;
 			void				SetService(bool service);
 
+			bool				WaitForExit() const;
+			void				SetWaitForExit(bool wait);
+
 			bool				CreateDefaultPort() const;
 			void				SetCreateDefaultPort(bool createPort);
 
@@ -116,6 +119,10 @@ private:
 			status_t			_SendLaunchDataReply(BMessage* message);
 			void				_SendPendingLaunchDataReplies();
 
+			status_t			_StartExitWaiter();
+			void				_CompleteWaitForExit(status_t status);
+	static	status_t			_WaitForExit(void* data);
+
 			status_t			_CreateAndTransferPorts();
 			port_id				_CreateAndTransferPort(const char* name,
 									int32 capacity);
@@ -129,11 +136,14 @@ private:
 			BStringList			fRequirements;
 			bool				fEnabled;
 			bool				fService;
+			bool				fWaitForExit;
 			bool				fCreateDefaultPort;
 			bool				fLaunching;
 			PortMap				fPortMap;
 			status_t			fInitStatus;
 			team_id				fTeam;
+			thread_id			fMainThread;
+			thread_id			fWaitThread;
 			port_id				fDefaultPort;
 			uint32				fToken;
 			status_t			fLaunchStatus;

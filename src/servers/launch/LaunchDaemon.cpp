@@ -485,6 +485,9 @@ LaunchDaemon::TeamLaunched(Job* job, status_t status)
 {
 	fLog.JobLaunched(job, status);
 
+	if (job->WaitForExit())
+		return;
+
 	MutexLocker locker(fTeamsLock);
 	fTeams.insert(std::make_pair(job->Team(), job));
 }
@@ -1607,6 +1610,8 @@ LaunchDaemon::_AddJob(Target* target, bool service, BMessage& message)
 
 	if (message.HasBool("legacy"))
 		job->SetCreateDefaultPort(!message.GetBool("legacy", !service));
+	if (message.GetBool("wait_for_exit"))
+		job->SetWaitForExit(true);
 
 	_SetCondition(job, message);
 	_SetEvent(job, message);

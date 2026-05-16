@@ -246,6 +246,9 @@ if [ FIsBuildFeatureEnabled openssl ] {
 }
 AddFilesToPackage apps
 	: $(SYSTEM_APPS) ;
+if [ FIsBuildFeatureEnabled openssl ] {
+	AddFilesToPackage apps : unlock_volume@x86_64,riscv64 ;
+}
 AddFilesToPackage preferences
 	: $(SYSTEM_PREFERENCES) ;
 AddFilesToPackage demos

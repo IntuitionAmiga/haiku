@@ -1571,6 +1571,21 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		case AS_HOME_SETTINGS_RELOADED:
+		{
+			if (fDesktop->LockSingleWindow()) {
+				DesktopSettings settings(fDesktop);
+				settings.GetDefaultPlainFont(fPlainFont);
+				settings.GetDefaultBoldFont(fBoldFont);
+				settings.GetDefaultFixedFont(fFixedFont);
+				fDesktop->UnlockSingleWindow();
+			}
+
+			BMessage update(AS_SYSTEM_FONT_CHANGED);
+			SendMessageToClient(&update);
+			break;
+		}
+
 		/* font messages */
 
 		case AS_ADD_FONT_FILE:

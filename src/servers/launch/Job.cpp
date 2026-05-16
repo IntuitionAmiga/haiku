@@ -26,10 +26,13 @@ Job::Job(const char* name)
 	BaseJob(name),
 	fEnabled(true),
 	fService(false),
+	fWaitForExit(false),
 	fCreateDefaultPort(false),
 	fLaunching(false),
 	fInitStatus(B_NO_INIT),
 	fTeam(-1),
+	fMainThread(-1),
+	fWaitThread(-1),
 	fDefaultPort(-1),
 	fToken((uint32)B_PREFERRED_TOKEN),
 	fLaunchStatus(B_NO_INIT),
@@ -46,10 +49,13 @@ Job::Job(const Job& other)
 	BaseJob(other.Name()),
 	fEnabled(other.IsEnabled()),
 	fService(other.IsService()),
+	fWaitForExit(other.WaitForExit()),
 	fCreateDefaultPort(other.CreateDefaultPort()),
 	fLaunching(other.IsLaunching()),
 	fInitStatus(B_NO_INIT),
 	fTeam(-1),
+	fMainThread(-1),
+	fWaitThread(-1),
 	fDefaultPort(-1),
 	fToken((uint32)B_PREFERRED_TOKEN),
 	fLaunchStatus(B_NO_INIT),
@@ -127,6 +133,20 @@ void
 Job::SetService(bool service)
 {
 	fService = service;
+}
+
+
+bool
+Job::WaitForExit() const
+{
+	return fWaitForExit;
+}
+
+
+void
+Job::SetWaitForExit(bool wait)
+{
+	fWaitForExit = wait;
 }
 
 
@@ -423,6 +443,8 @@ void
 Job::TeamDeleted()
 {
 	fTeam = -1;
+	fMainThread = -1;
+	fWaitThread = -1;
 	fDefaultPort = -1;
 
 	if (IsService())
@@ -493,6 +515,36 @@ Job::GetMessenger(BMessenger& messenger)
 status_t
 Job::Run()
 {
+	if (WaitForExit()) {
+		if (State() != B_JOB_STATE_WAITING_TO_RUN)
+			return B_NOT_ALLOWED;
+
+		SetState(B_JOB_STATE_STARTED);
+		NotifyStateListeners();
+
+		SetState(B_JOB_STATE_IN_PROGRESS);
+		status_t status = Execute();
+
+		if (status == B_OK && IsRunning())
+			status = _StartExitWaiter();
+
+		if (status != B_OK || !IsRunning()) {
+			Cleanup(status);
+
+			SetState(status == B_OK
+				? B_JOB_STATE_SUCCEEDED
+				: status == B_CANCELED
+					? B_JOB_STATE_ABORTED
+					: B_JOB_STATE_FAILED);
+			NotifyStateListeners();
+
+			if (!IsService())
+				SetState(B_JOB_STATE_WAITING_TO_RUN);
+		}
+
+		return status;
+	}
+
 	status_t status = BJob::Run();
 
 	// Jobs can be relaunched at any time
@@ -513,6 +565,7 @@ Job::Execute()
 		debug_printf("Ignore launching %s\n", Name());
 
 	fLaunching = false;
+
 	return status;
 }
 
@@ -612,6 +665,63 @@ Job::_SendPendingLaunchDataReplies()
 }
 
 
+status_t
+Job::_StartExitWaiter()
+{
+	fWaitThread = spawn_thread(&Job::_WaitForExit, Name(), B_NORMAL_PRIORITY,
+		this);
+	if (fWaitThread < 0) {
+		status_t status = fWaitThread;
+		kill_team(fTeam);
+		TeamDeleted();
+		return status;
+	}
+
+	status_t status = resume_thread(fWaitThread);
+	if (status != B_OK) {
+		kill_thread(fWaitThread);
+		fWaitThread = -1;
+		kill_team(fTeam);
+		TeamDeleted();
+	}
+
+	return status;
+}
+
+
+void
+Job::_CompleteWaitForExit(status_t status)
+{
+	TeamDeleted();
+	Cleanup(status);
+
+	SetState(status == B_OK
+		? B_JOB_STATE_SUCCEEDED
+		: status == B_CANCELED
+			? B_JOB_STATE_ABORTED
+			: B_JOB_STATE_FAILED);
+	NotifyStateListeners();
+
+	if (!IsService())
+		SetState(B_JOB_STATE_WAITING_TO_RUN);
+}
+
+
+/*static*/ status_t
+Job::_WaitForExit(void* data)
+{
+	Job* job = static_cast<Job*>(data);
+
+	status_t exitStatus = B_OK;
+	status_t status = wait_for_thread(job->fMainThread, &exitStatus);
+	if (status == B_OK)
+		status = exitStatus;
+
+	job->_CompleteWaitForExit(status);
+	return status;
+}
+
+
 /*!	Creates the ports for a newly launched job. If the registrar already
 	pre-registered the application, \c fDefaultPort will already be set, and
 	honored when filling the ports message.
@@ -702,6 +812,7 @@ Job::_Launch(const char* signature, entry_ref* ref, int argCount,
 	status_t result = BRoster::Private().Launch(signature, ref, NULL, argCount,
 		args, environment, &fTeam, &mainThread, &fDefaultPort, NULL, true);
 	if (result == B_OK) {
+		fMainThread = mainThread;
 		result = _CreateAndTransferPorts();
 
 		if (result == B_OK) {
@@ -709,8 +820,12 @@ Job::_Launch(const char* signature, entry_ref* ref, int argCount,
 
 			if (fTeamListener != NULL)
 				fTeamListener->TeamLaunched(this, result);
-		} else
+		} else {
 			kill_thread(mainThread);
+			fTeam = -1;
+			fMainThread = -1;
+			fWaitThread = -1;
+		}
 	}
 
 	_SetLaunchStatus(result);

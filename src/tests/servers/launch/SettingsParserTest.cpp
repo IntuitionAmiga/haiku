@@ -37,6 +37,7 @@ class SettingsParserTest : public CppUnit::TestFixture {
 	CPPUNIT_TEST(TestRunMultiLine);
 	CPPUNIT_TEST(TestRunIfThenElseFlat);
 	CPPUNIT_TEST(TestRunIfThenElseMultiLine);
+	CPPUNIT_TEST(TestEncryptedHomeLaunchOrdering);
 	CPPUNIT_TEST_SUITE_END();
 
 	status_t _ParseCondition(const char* text, BMessage& message)
@@ -407,6 +408,118 @@ public:
 			BString(otherwise.GetString("target", "-")));
 		CPPUNIT_ASSERT_EQUAL(1, (int)_ArrayCount(otherwise, "target"));
 		CPPUNIT_ASSERT_EQUAL(1, (int)otherwise.CountNames(B_ANY_TYPE));
+	}
+
+	void TestEncryptedHomeLaunchOrdering()
+	{
+		SettingsParser parser;
+		BMessage jobs;
+		status_t status = parser.Parse("service x-vnd.Haiku-app_server {\n"
+			"\tlaunch /system/servers/app_server\n"
+			"\tif file_exists /system/apps/unlock_volume\n"
+			"}\n"
+			"service x-vnd.Haiku-app_server {\n"
+			"\tlaunch /system/servers/app_server\n"
+			"\tif not file_exists /system/apps/unlock_volume\n"
+			"}\n"
+			"job x-vnd.Haiku-home_unlock {\n"
+			"\tlaunch /system/apps/unlock_volume\n"
+			"\tif file_exists /system/apps/unlock_volume\n"
+			"\trequires x-vnd.Haiku-app_server\n"
+			"\twait_for_exit\n"
+			"\ton initial_volumes_mounted\n"
+			"}\n"
+			"job x-vnd.Haiku-autologin-unlocked {\n"
+			"\tlaunch /system/bin/autologin\n"
+			"\tif file_exists /system/apps/unlock_volume\n"
+			"\trequires x-vnd.Haiku-home_unlock\n"
+			"}\n"
+			"job x-vnd.Haiku-autologin {\n"
+			"\tlaunch /system/bin/autologin\n"
+			"\tif not file_exists /system/apps/unlock_volume\n"
+			"}\n", jobs);
+		CPPUNIT_ASSERT_EQUAL(B_OK, status);
+		CPPUNIT_ASSERT_EQUAL(2, (int)jobs.CountNames(B_ANY_TYPE));
+		CPPUNIT_ASSERT_EQUAL(2, (int)_ArrayCount(jobs, "service"));
+		CPPUNIT_ASSERT_EQUAL(3, (int)_ArrayCount(jobs, "job"));
+
+		BMessage appServer;
+		CPPUNIT_ASSERT_EQUAL(B_OK, jobs.FindMessage("service", &appServer));
+		CPPUNIT_ASSERT_EQUAL(BString("x-vnd.Haiku-app_server"),
+			BString(appServer.GetString("name")));
+		CPPUNIT_ASSERT_EQUAL(BString("/system/servers/app_server"),
+			BString(appServer.GetString("launch")));
+		CPPUNIT_ASSERT(!appServer.HasMessage("on"));
+
+		BMessage appServerCondition;
+		CPPUNIT_ASSERT_EQUAL(B_OK, appServer.FindMessage("if",
+			&appServerCondition));
+		BMessage appServerFileExists;
+		CPPUNIT_ASSERT_EQUAL(B_OK, appServerCondition.FindMessage(
+			"file_exists", &appServerFileExists));
+		CPPUNIT_ASSERT_EQUAL(BString("/system/apps/unlock_volume"),
+			BString(appServerFileExists.GetString("args")));
+
+		BMessage fallbackAppServer;
+		CPPUNIT_ASSERT_EQUAL(B_OK, jobs.FindMessage("service", 1,
+			&fallbackAppServer));
+		CPPUNIT_ASSERT_EQUAL(BString("x-vnd.Haiku-app_server"),
+			BString(fallbackAppServer.GetString("name")));
+		CPPUNIT_ASSERT_EQUAL(BString("/system/servers/app_server"),
+			BString(fallbackAppServer.GetString("launch")));
+		CPPUNIT_ASSERT(!fallbackAppServer.HasMessage("on"));
+
+		BMessage fallbackCondition;
+		CPPUNIT_ASSERT_EQUAL(B_OK, fallbackAppServer.FindMessage("if",
+			&fallbackCondition));
+		BMessage fallbackNot;
+		CPPUNIT_ASSERT_EQUAL(B_OK, fallbackCondition.FindMessage("not",
+			&fallbackNot));
+		BMessage fallbackFileExists;
+		CPPUNIT_ASSERT_EQUAL(B_OK, fallbackNot.FindMessage("file_exists",
+			&fallbackFileExists));
+		CPPUNIT_ASSERT_EQUAL(BString("/system/apps/unlock_volume"),
+			BString(fallbackFileExists.GetString("args")));
+
+		BMessage job;
+		CPPUNIT_ASSERT_EQUAL(B_OK, jobs.FindMessage("job", 0, &job));
+		CPPUNIT_ASSERT_EQUAL(BString("x-vnd.Haiku-home_unlock"),
+			BString(job.GetString("name")));
+		CPPUNIT_ASSERT_EQUAL(BString("/system/apps/unlock_volume"),
+			BString(job.GetString("launch")));
+		CPPUNIT_ASSERT_EQUAL(BString("x-vnd.Haiku-app_server"),
+			BString(job.GetString("requires")));
+		CPPUNIT_ASSERT(job.GetBool("wait_for_exit"));
+
+		BMessage condition;
+		CPPUNIT_ASSERT_EQUAL(B_OK, job.FindMessage("if", &condition));
+
+		BMessage fileExists;
+		CPPUNIT_ASSERT_EQUAL(B_OK, condition.FindMessage("file_exists",
+			&fileExists));
+		CPPUNIT_ASSERT_EQUAL(BString("/system/apps/unlock_volume"),
+			BString(fileExists.GetString("args")));
+
+		BMessage event;
+		CPPUNIT_ASSERT_EQUAL(B_OK, job.FindMessage("on", &event));
+		CPPUNIT_ASSERT(event.HasMessage("initial_volumes_mounted"));
+
+		BMessage unlockedAutologin;
+		CPPUNIT_ASSERT_EQUAL(B_OK, jobs.FindMessage("job", 1,
+			&unlockedAutologin));
+		CPPUNIT_ASSERT_EQUAL(BString("x-vnd.Haiku-autologin-unlocked"),
+			BString(unlockedAutologin.GetString("name")));
+		CPPUNIT_ASSERT_EQUAL(BString("/system/bin/autologin"),
+			BString(unlockedAutologin.GetString("launch")));
+		CPPUNIT_ASSERT_EQUAL(BString("x-vnd.Haiku-home_unlock"),
+			BString(unlockedAutologin.GetString("requires")));
+
+		BMessage fallbackAutologin;
+		CPPUNIT_ASSERT_EQUAL(B_OK, jobs.FindMessage("job", 2,
+			&fallbackAutologin));
+		CPPUNIT_ASSERT_EQUAL(BString("x-vnd.Haiku-autologin"),
+			BString(fallbackAutologin.GetString("name")));
+		CPPUNIT_ASSERT(!fallbackAutologin.HasString("requires"));
 	}
 };
 

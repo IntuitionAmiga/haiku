@@ -165,6 +165,7 @@ const static settings_template kJobTemplate[] = {
 	{B_BOOL_TYPE, "disabled", NULL},
 	{B_STRING_TYPE, "launch", NULL},
 	{B_STRING_TYPE, "requires", NULL},
+	{B_BOOL_TYPE, "wait_for_exit", NULL},
 	{B_BOOL_TYPE, "legacy", NULL},
 	{B_MESSAGE_TYPE, "port", kPortTemplate},
 	{B_MESSAGE_TYPE, "on", kEventTemplate},

@@ -58,5 +58,6 @@ HaikuSubInclude terminal ;
 HaikuSubInclude text_search ;
 HaikuSubInclude tracker ;
 HaikuSubInclude tv ;
+HaikuSubInclude unlock_volume ;
 HaikuSubInclude webpositive ;
 HaikuSubInclude workspaces ;

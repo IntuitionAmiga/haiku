@@ -636,6 +636,47 @@ Desktop::BroadcastToAllWindows(int32 code)
 }
 
 
+status_t
+Desktop::ReloadHomeSettings()
+{
+	if (!LockAllWindows())
+		return B_ERROR;
+
+	status_t status = fSettings->Reload();
+	if (status == B_OK)
+		_ReloadWorkspaceSettings();
+
+	UnlockAllWindows();
+
+	if (status == B_OK) {
+		Redraw();
+		BroadcastToAllApps(AS_HOME_SETTINGS_RELOADED);
+	}
+	return status;
+}
+
+
+void
+Desktop::_ReloadWorkspaceSettings()
+{
+	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+
+	for (int32 i = 0; i < kMaxWorkspaces; i++)
+		fWorkspaces[i].RestoreConfiguration(*fSettings->WorkspacesMessage(i));
+
+	if (fCurrentWorkspace >= fSettings->WorkspacesCount())
+		fCurrentWorkspace = fSettings->WorkspacesCount() - 1;
+
+	_SetCurrentWorkspaceConfiguration();
+
+	BRegion stillAvailableOnScreen;
+	_RebuildClippingForAllWindows(stillAvailableOnScreen);
+	_SetBackground(stillAvailableOnScreen);
+
+	_WindowChanged(NULL);
+}
+
+
 int32
 Desktop::GetAllWindowTargets(DelayedMessage& message)
 {

@@ -1,0 +1,43 @@
+SubDir HAIKU_TOP src apps unlock_volume ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
+	UsePrivateHeaders app encrypted_home storage ;
+	UsePrivateSystemHeaders ;
+	UseHeaders [ FDirName $(HAIKU_TOP) src libs encrypted_home ] : true ;
+	UseHeaders [ FDirName $(HAIKU_TOP) src libs phc_argon2 ] : true ;
+	UseHeaders [ FDirName $(HAIKU_TOP) src libs openbsd_softraid_crypto ] : true ;
+	UseBuildFeatureHeaders openssl ;
+
+	Application unlock_volume :
+		UnlockVolumeApp.cpp
+		UnlockVolumeSupport.cpp
+		:
+		be
+		localestub
+		[ TargetLibstdc++ ]
+		[ TargetLibsupc++ ]
+		[ BuildFeatureAttribute openssl : libraries ]
+		[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ]
+	;
+
+	Depends unlock_volume :
+		std_probe
+		[ MultiArchDefaultGristFiles libencrypted_home_userland.a ]
+		[ MultiArchDefaultGristFiles libopenbsd_softraid_crypto.a ]
+		[ MultiArchDefaultGristFiles libphc_argon2.a ]
+	;
+
+	ObjectC++Flags [ FGristFiles UnlockVolumeApp.o UnlockVolumeSupport.o ] :
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+	;
+
+	Includes [ FGristFiles UnlockVolumeApp.cpp UnlockVolumeSupport.cpp ] :
+		[ BuildFeatureAttribute openssl : headers ] ;
+}

@@ -1,0 +1,26 @@
+SubDir HAIKU_TOP src tests apps unlock_volume ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
+	UsePrivateHeaders encrypted_home ;
+	UseHeaders [ FDirName $(HAIKU_TOP) src apps unlock_volume ] : true ;
+
+	SimpleTest UnlockVolumeTest :
+		UnlockVolumeTest.cpp
+		UnlockVolumeSupport.cpp
+		:
+		[ TargetLibstdc++ ]
+		[ TargetLibsupc++ ]
+	;
+
+	SEARCH on [ FGristFiles UnlockVolumeSupport.cpp ]
+		= [ FDirName $(HAIKU_TOP) src apps unlock_volume ] ;
+
+	ObjectC++Flags [ FGristFiles UnlockVolumeTest.o UnlockVolumeSupport.o ] :
+		-std=c++23
+		-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+		-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+		-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+	;
+}

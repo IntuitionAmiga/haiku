@@ -49,6 +49,7 @@ private:
 									const char* targetScreen);
 	virtual	Desktop*			_FindDesktop(uid_t userID,
 									const char* targetScreen);
+			void				_ReloadHomeSettings();
 
 			void				_LaunchInputServer();
 

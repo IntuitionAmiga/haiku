@@ -82,6 +82,7 @@ public:
 
 			void				BroadcastToAllApps(int32 code);
 			void				BroadcastToAllWindows(int32 code);
+			status_t			ReloadHomeSettings();
 
 			int32				GetAllWindowTargets(DelayedMessage& message);
 			int32				GetAllAppTargets(DelayedMessage& message);
@@ -323,6 +324,7 @@ private:
 			void				_ResumeDirectFrameBufferAccess();
 
 			void				_ScreenChanged(Screen* screen);
+			void				_ReloadWorkspaceSettings();
 			void				_SetCurrentWorkspaceConfiguration();
 			void				_SetWorkspace(int32 index,
 									bool moveFocusWindow = false);
