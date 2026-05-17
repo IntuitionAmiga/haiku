@@ -1,0 +1,3 @@
+#!/usr/bin/env expect
+puts stderr "path_a_headless.exp is driven through image_gate.sh; direct execution is unsupported."
+exit 2

@@ -1,0 +1,22 @@
+SubDir HAIKU_TOP src tests integration encrypted_home ;
+
+include [ FDirName $(HAIKU_TOP) build jam encrypted_home_features.jam ] ;
+
+local integrationDir = [ FDirName $(HAIKU_TOP) src tests integration
+	encrypted_home ] ;
+
+NotFile EncryptedHomeImageGateSelfTest ;
+Depends EncryptedHomeImageGateSelfTest : [ RunCommandLine
+	bash $(integrationDir)/test_harness.sh ] ;
+
+if $(ENCRYPTED_HOME_BUILD_ENABLED) {
+	NotFile EncryptedHomeImageGate_Phase7 ;
+	Depends EncryptedHomeImageGate_Phase7 : [ RunCommandLine
+		env HAIKU_ENCRYPTED_HOME_PREFLIGHT_ONLY=1
+			bash $(integrationDir)/image_gate.sh phase7 ] ;
+
+	NotFile EncryptedHomeImageGate_Phase8 ;
+	Depends EncryptedHomeImageGate_Phase8 : [ RunCommandLine
+		env HAIKU_ENCRYPTED_HOME_PREFLIGHT_ONLY=1
+			bash $(integrationDir)/image_gate.sh phase8 ] ;
+}
