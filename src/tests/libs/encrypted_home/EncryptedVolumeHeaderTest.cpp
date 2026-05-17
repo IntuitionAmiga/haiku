@@ -75,6 +75,16 @@ AssertPermissionDenied(auto&& result)
 }
 
 
+void
+AssertLastDerivedBufferCleansed()
+{
+	const auto derived = EncryptedVolumeHeader::DebugLastDerivedBuffer();
+	CPPUNIT_ASSERT(derived.size() == 64);
+	CPPUNIT_ASSERT(std::all_of(derived.begin(), derived.end(),
+		[](std::byte byte) { return byte == std::byte{0}; }));
+}
+
+
 uint32
 SequenceNumber(const HeaderBytes& header)
 {
@@ -152,6 +162,10 @@ EncryptedVolumeHeaderTest::Suite()
 		&EncryptedVolumeHeaderTest::TestChangePassphraseRejectsSequenceOverflow));
 	suite->addTest(new TestCaller("zeroization after unlock",
 		&EncryptedVolumeHeaderTest::TestZeroizationAfterUnlock));
+	suite->addTest(new TestCaller("zeroization after wrong passphrase",
+		&EncryptedVolumeHeaderTest::TestZeroizationAfterWrongPassphrase));
+	suite->addTest(new TestCaller("zeroization after format",
+		&EncryptedVolumeHeaderTest::TestZeroizationAfterFormat));
 
 	return suite;
 }
@@ -461,12 +475,43 @@ EncryptedVolumeHeaderTest::TestZeroizationAfterUnlock()
 		TestOptions());
 	CPPUNIT_ASSERT(formatted.has_value());
 
+	const uint64 cleanseCount = EncryptedVolumeHeader::DebugDerivedCleanseCount();
 	const auto unlocked = EncryptedVolumeHeader::Unlock(formatted->header,
 		Bytes(kPassphrase));
 	CPPUNIT_ASSERT(unlocked.has_value());
+	CPPUNIT_ASSERT(EncryptedVolumeHeader::DebugDerivedCleanseCount()
+		> cleanseCount);
 
-	const auto derived = EncryptedVolumeHeader::DebugLastDerivedBuffer();
-	CPPUNIT_ASSERT(derived.size() == 64);
-	CPPUNIT_ASSERT(std::all_of(derived.begin(), derived.end(),
-		[](std::byte byte) { return byte == std::byte{0}; }));
+	AssertLastDerivedBufferCleansed();
+}
+
+
+void
+EncryptedVolumeHeaderTest::TestZeroizationAfterWrongPassphrase()
+{
+	const auto formatted = EncryptedVolumeHeader::Format(Bytes(kPassphrase),
+		TestOptions());
+	CPPUNIT_ASSERT(formatted.has_value());
+
+	const uint64 cleanseCount = EncryptedVolumeHeader::DebugDerivedCleanseCount();
+	AssertPermissionDenied(EncryptedVolumeHeader::Unlock(formatted->header,
+		Bytes(kWrongPassphrase)));
+	CPPUNIT_ASSERT(EncryptedVolumeHeader::DebugDerivedCleanseCount()
+		> cleanseCount);
+
+	AssertLastDerivedBufferCleansed();
+}
+
+
+void
+EncryptedVolumeHeaderTest::TestZeroizationAfterFormat()
+{
+	const uint64 cleanseCount = EncryptedVolumeHeader::DebugDerivedCleanseCount();
+	const auto formatted = EncryptedVolumeHeader::Format(Bytes(kPassphrase),
+		TestOptions());
+	CPPUNIT_ASSERT(formatted.has_value());
+	CPPUNIT_ASSERT(EncryptedVolumeHeader::DebugDerivedCleanseCount()
+		> cleanseCount);
+
+	AssertLastDerivedBufferCleansed();
 }

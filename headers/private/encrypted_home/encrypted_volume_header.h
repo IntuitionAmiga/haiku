@@ -100,6 +100,7 @@ public:
 		std::span<const std::byte> newPassphrase);
 
 	[[nodiscard]] static std::span<const std::byte> DebugLastDerivedBuffer();
+	[[nodiscard]] static uint64 DebugDerivedCleanseCount();
 };
 
 } // namespace BPrivate::EncryptedHome

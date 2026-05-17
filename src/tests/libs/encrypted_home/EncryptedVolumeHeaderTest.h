@@ -33,6 +33,8 @@ public:
 	void TestOpenDoesNotRollbackNewerHeader();
 	void TestChangePassphraseRejectsSequenceOverflow();
 	void TestZeroizationAfterUnlock();
+	void TestZeroizationAfterWrongPassphrase();
+	void TestZeroizationAfterFormat();
 };
 
 

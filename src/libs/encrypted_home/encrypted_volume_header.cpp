@@ -28,6 +28,7 @@ constexpr uint32 kMaxArgon2MemoryCostKiB = wire::kMaxArgon2MemoryCostKiB;
 constexpr uint32 kMaxArgon2Parallelism = wire::kMaxArgon2Parallelism;
 
 std::array<std::byte, 64> sLastDerivedBuffer = {};
+uint64 sDerivedCleanseCount = 0;
 
 
 uint16
@@ -152,6 +153,7 @@ RecordDerivedAfterCleanse(secure_buffer<64>& derived)
 	derived.Cleanse();
 	std::copy(derived.data(), derived.data() + derived.size(),
 		sLastDerivedBuffer.begin());
+	sDerivedCleanseCount++;
 }
 
 
@@ -289,13 +291,18 @@ BuildHeader(std::span<const std::byte> passphrase, uint32 sequenceNumber,
 		return std::unexpected(derived.error());
 
 	auto kek = std::span<const std::byte, 32>(derived->data(), 32);
-	if (auto result = WrapMasterKey(header, kek, masterKey); !result.has_value())
+	if (auto result = WrapMasterKey(header, kek, masterKey); !result.has_value()) {
+		RecordDerivedAfterCleanse(*derived);
 		return std::unexpected(result.error());
+	}
 
 	auto macKey = std::span<const std::byte, 32>(derived->data() + 32, 32);
-	if (auto result = ComputeHmac(header, macKey); !result.has_value())
+	if (auto result = ComputeHmac(header, macKey); !result.has_value()) {
+		RecordDerivedAfterCleanse(*derived);
 		return std::unexpected(result.error());
+	}
 
+	RecordDerivedAfterCleanse(*derived);
 	return header;
 }
 
@@ -544,6 +551,13 @@ std::span<const std::byte>
 EncryptedVolumeHeader::DebugLastDerivedBuffer()
 {
 	return sLastDerivedBuffer;
+}
+
+
+uint64
+EncryptedVolumeHeader::DebugDerivedCleanseCount()
+{
+	return sDerivedCleanseCount;
 }
 
 } // namespace BPrivate::EncryptedHome

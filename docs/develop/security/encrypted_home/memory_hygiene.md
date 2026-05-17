@@ -16,3 +16,19 @@ driver teardown.
 Plaintext I/O buffers in the kernel driver are cleansed on error paths before
 freeing. Partial user-copy failures cleanse any copied sensitive bytes before
 returning.
+
+## Audit Checklist
+
+- `EncryptedVolumeHeader::Unlock()` cleanses the Argon2id output buffer on
+  success, HMAC failure, and AES unwrap failure. The unit tests assert both a
+  cleanse event and an all-zero debug snapshot after successful unlock and wrong
+  passphrase.
+- Header formatting and passphrase rewrap use the same derived-buffer cleanse
+  hook after wrapping and HMAC generation. The unit tests assert that `Format()`
+  records a cleanse event before returning the formatted header.
+- OpenSSL AES key schedules used for AES key-wrap and unwrap are cleansed with
+  `OPENSSL_cleanse()` immediately after the operation.
+- Kernel unlock requests are cleansed after copying from userland, including
+  partial copy-failure paths.
+- Kernel plaintext transfer buffers are bounded to fixed-size chunks and
+  cleansed before being freed.
