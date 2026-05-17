@@ -245,13 +245,11 @@ InstallerWindow::InstallerWindow()
 	fHomeMenuField->SetAlignment(B_ALIGN_RIGHT);
 
 	fEncryptHomeCheckBox = new BCheckBox("encryptHome",
-		B_TRANSLATE("Encrypt home folder"),
+		B_TRANSLATE("Encrypt home folder (separate partition)"),
 		new BMessage(ENCRYPT_HOME_CHANGED));
-	fEncryptHomeCheckBox->SetToolTip(B_TRANSLATE("Encrypts /boot/home on a "
-		"separate partition and asks for a passphrase at boot. This protects "
-		"home contents on a powered-off disk, but it does not protect the "
-		"system partition, running sessions, or detect encrypted data "
-		"tampering."));
+	fEncryptHomeCheckBox->SetToolTip(B_TRANSLATE("Encrypts /boot/home on an "
+		"unused separate partition. The install target cannot be reused as "
+		"the home backing partition."));
 	fPassphraseControl = new BTextControl("homePassphrase",
 		B_TRANSLATE("Passphrase:"), "", new BMessage(ENCRYPT_HOME_CHANGED));
 	fPassphraseControl->SetModificationMessage(
@@ -474,8 +472,8 @@ InstallerWindow::MessageReceived(BMessage *msg)
 							::EncryptedHomeProvisioner::Validate(
 								encryptedHomeOptions) != B_OK) {
 						_SetStatusMessage(B_TRANSLATE("Encrypted home "
-							"requires a separate home partition and matching "
-							"non-empty passphrases."));
+							"requires a separate unused home partition and "
+							"matching non-empty passphrases."));
 						break;
 					}
 #endif
@@ -952,6 +950,7 @@ InstallerWindow::_UpdateControls()
 
 #ifdef ENCRYPTED_HOME_AVAILABLE
 	bool encryptHome = fEncryptHomeCheckBox->Value() == B_CONTROL_ON;
+	bool foundOneSuitableHome = false;
 	for (int32 i = fHomeMenu->CountItems() - 1; i >= 0; i--) {
 		PartitionMenuItem* homeItem
 			= (PartitionMenuItem*)fHomeMenu->ItemAt(i);
@@ -961,13 +960,20 @@ InstallerWindow::_UpdateControls()
 			homeItem->SetMarked(false);
 		} else
 			homeItem->SetEnabled(homeItem->IsValidTarget());
+
+		if (homeItem->IsEnabled())
+			foundOneSuitableHome = true;
 	}
 
 	PartitionMenuItem* homeItem = (PartitionMenuItem*)fHomeMenu->FindMarked();
+	if (homeItem != NULL && !homeItem->IsEnabled())
+		homeItem = NULL;
 	if (homeItem != NULL)
 		label = homeItem->MenuLabel();
 	else if (fHomeMenu->CountItems() == 0)
 		label = B_TRANSLATE_COMMENT("<none>", "No partition available");
+	else if (!foundOneSuitableHome)
+		label = B_TRANSLATE("No separate partition available");
 	else
 		label = B_TRANSLATE("Please choose home partition");
 	fHomeMenuField->MenuItem()->SetLabel(label.String());
@@ -1024,7 +1030,8 @@ InstallerWindow::_UpdateControls()
 				fPassphraseConfirmControl->Text()) == 0;
 		if (homeItem == NULL) {
 			_SetStatusMessage(B_TRANSLATE("Encrypted home requires a separate "
-				"home partition. Open DriveSetup, create one, then return."));
+				"unused partition. The install target cannot be reused; open "
+				"DriveSetup, create a home partition, then return."));
 		} else if (strlen(fPassphraseControl->Text()) == 0) {
 			_SetStatusMessage(B_TRANSLATE("Enter a passphrase for the "
 				"encrypted home folder."));
