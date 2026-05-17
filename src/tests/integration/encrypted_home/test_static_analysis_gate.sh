@@ -78,6 +78,17 @@ make_fake_tool()
 		printf '%s\n' \
 			'#!/bin/sh' \
 			'printf "%s %s\n" cppcheck "$*" >>"$STATIC_GATE_TOOL_LOG"' \
+			'if [ -n "${STATIC_GATE_EXPECT_CPPCHECK_ADDON:-}" ]; then' \
+			'	found=0' \
+			'	for arg do' \
+			'		[ "$arg" = "$STATIC_GATE_EXPECT_CPPCHECK_ADDON" ] && found=1' \
+			'	done' \
+			'	if [ "$found" -eq 0 ]; then' \
+			'		printf "missing exact cppcheck addon arg: %s\n" \' \
+			'			"$STATIC_GATE_EXPECT_CPPCHECK_ADDON" >&2' \
+			'		exit 1' \
+			'	fi' \
+			'fi' \
 			'if [ -n "${STATIC_GATE_CPPCHECK_REPORT:-}" ]; then' \
 			'	printf "%s:12:3: warning: fake cppcheck report [fake]\n" \' \
 			'		"$STATIC_GATE_CPPCHECK_REPORT" >&2' \
@@ -175,10 +186,33 @@ if ! grep -q '^clang-tidy .*--extra-arg=-Wno-error=unknown-warning-option .*--ex
 	printf 'expected clang-tidy to tolerate GCC-only warning flags\n' >&2
 	exit 1
 fi
-if ! grep -q '^cppcheck .*--addon=cert' "$tool_log"; then
-	printf 'expected cppcheck to run the CERT addon\n' >&2
+if ! grep -q '^cppcheck .*--report-type=cert-cpp-2016' "$tool_log"; then
+	printf 'expected cppcheck to emit CERT report classifications\n' >&2
 	exit 1
 fi
+if ! grep -q '^cppcheck .*--addon=cert' "$tool_log"; then
+	printf 'expected cppcheck to run the CERT addon by default\n' >&2
+	exit 1
+fi
+rm -f "$tool_log"
+cert_addon_dir="$tmp/cert addon dir"
+mkdir -p "$cert_addon_dir"
+cert_addon="$cert_addon_dir/cert addon.py"
+printf '# fake cert addon\n' >"$cert_addon"
+CPPCHECK_CERT_ADDON="$cert_addon" \
+	STATIC_GATE_EXPECT_CPPCHECK_ADDON="--addon=$cert_addon" \
+	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_pass \
+	"$script_dir/static_analysis_gate.sh" --root "$root" \
+	--compile-commands "$compile_commands"
+if ! grep -F -q -- "--addon=$cert_addon" "$tool_log"; then
+	printf 'expected cppcheck to use explicit CERT addon path\n' >&2
+	exit 1
+fi
+rm -f "$tool_log"
+CPPCHECK_CERT_ADDON="$tmp/missing-cert.py" STATIC_GATE_TOOL_LOG="$tool_log" \
+	PATH="$fakebin:$PATH" assert_fail \
+	"$script_dir/static_analysis_gate.sh" --root "$root" \
+	--compile-commands "$compile_commands"
 rm -f "$tool_log"
 STATIC_GATE_ANALYZE_REPORT="$root/headers/os/interface/LayoutBuilder.h" \
 	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_pass \
@@ -189,6 +223,10 @@ STATIC_GATE_ANALYZE_REPORT="$root/src/libs/encrypted_home/clean.cpp" \
 	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_fail \
 	"$script_dir/static_analysis_gate.sh" --root "$root" \
 	--compile-commands "$compile_commands"
+if ! grep -q '^cppcheck ' "$tool_log"; then
+	printf 'expected cppcheck to run after an in-scope analyzer finding\n' >&2
+	exit 1
+fi
 rm -f "$tool_log"
 STATIC_GATE_ANALYZE_REPORT="$root/generated.x86_64/../src/libs/encrypted_home/clean.cpp" \
 	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_fail \
