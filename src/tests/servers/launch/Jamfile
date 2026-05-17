@@ -16,13 +16,19 @@ UnitTestLib liblaunch_daemontest.so :
 
 	SettingsParserTest.cpp
 	ConditionsTest.cpp
+	JobStateTest.cpp
 	UtilityTest.cpp
 
 	# from the launch_daemon
+	BaseJob.cpp
+	Events.cpp
+	FileWatcher.cpp
+	Job.cpp
 	NetworkWatcher.cpp
 	SettingsParser.cpp
 	Conditions.cpp
 	Utility.cpp
+	VolumeWatcher.cpp
 
 	: be network bnetapi shared [ TargetLibstdc++ ] [ TargetLibsupc++ ]
 ;

@@ -516,8 +516,15 @@ status_t
 Job::Run()
 {
 	if (WaitForExit()) {
-		if (State() != B_JOB_STATE_WAITING_TO_RUN)
-			return B_NOT_ALLOWED;
+		switch (State()) {
+			case B_JOB_STATE_WAITING_TO_RUN:
+			case B_JOB_STATE_SUCCEEDED:
+			case B_JOB_STATE_FAILED:
+			case B_JOB_STATE_ABORTED:
+				break;
+			default:
+				return B_NOT_ALLOWED;
+		}
 
 		SetState(B_JOB_STATE_STARTED);
 		NotifyStateListeners();
@@ -548,7 +555,7 @@ Job::Run()
 	status_t status = BJob::Run();
 
 	// Jobs can be relaunched at any time
-	if (!IsService())
+	if (!IsService() && !WaitForExit())
 		SetState(B_JOB_STATE_WAITING_TO_RUN);
 
 	return status;
@@ -702,7 +709,7 @@ Job::_CompleteWaitForExit(status_t status)
 			: B_JOB_STATE_FAILED);
 	NotifyStateListeners();
 
-	if (!IsService())
+	if (!IsService() && !WaitForExit())
 		SetState(B_JOB_STATE_WAITING_TO_RUN);
 }
 
