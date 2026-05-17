@@ -9,6 +9,10 @@ NotFile EncryptedHomeImageGateSelfTest ;
 Depends EncryptedHomeImageGateSelfTest : [ RunCommandLine
 	bash $(integrationDir)/test_harness.sh ] ;
 
+NotFile EncryptedHomeStaticAnalysisGateSelfTest ;
+Depends EncryptedHomeStaticAnalysisGateSelfTest : [ RunCommandLine
+	bash $(integrationDir)/test_static_analysis_gate.sh ] ;
+
 if $(ENCRYPTED_HOME_BUILD_ENABLED) {
 	NotFile EncryptedHomeImageGate_Phase7 ;
 	Depends EncryptedHomeImageGate_Phase7 : [ RunCommandLine
