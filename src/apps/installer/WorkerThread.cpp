@@ -371,7 +371,7 @@ WorkerThread::InstallEFILoader(partition_id id, bool rename)
 	BFile loaderDest;
 	BPath destPath;
 	BEntry existingEntry;
-	off_t size;
+	off_t size = 0;
 	BString errText;
 	status_t err = B_OK;
 
@@ -387,7 +387,9 @@ WorkerThread::InstallEFILoader(partition_id id, bool rename)
 		|| loaderToCopy.GetSize(&size) != B_OK)
 		errText.SetTo(B_TRANSLATE("Failed to find EFI loader file!"));
 
-	char* buffer = new char[size];
+	char* buffer = NULL;
+	if (errText.IsEmpty())
+		buffer = new char[size];
 	if (errText.IsEmpty() && loaderToCopy.Read(buffer, size) != size)
 		errText.SetTo(B_TRANSLATE("Failed to read EFI loader file!"));
 

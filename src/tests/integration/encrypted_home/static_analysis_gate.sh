@@ -91,6 +91,8 @@ require_command()
 	command -v "$1" >/dev/null 2>&1 || gate_fail "missing required tool: $1"
 }
 
+clang_tidy_checks='clang-analyzer-*,bugprone-*,cert-*,cppcoreguidelines-*,performance-*,portability-*,modernize-use-nullptr,modernize-use-nodiscard,modernize-use-using,modernize-use-default-member-init'
+
 require_command rg
 
 work_dir=${TMPDIR:-/tmp}/encrypted-home-static-gate.$$
@@ -202,6 +204,100 @@ compile_database_scope_files()
 	done | sort -u
 }
 
+path_in_scope()
+{
+	local path=$1
+	local path_dir
+	local path_base
+	local rel
+	local scope
+
+	rel=$path
+	case "$rel" in
+		/*)
+			path_dir=$(dirname -- "$rel")
+			path_base=$(basename -- "$rel")
+			if [ -d "$path_dir" ]; then
+				rel=$(CDPATH= cd -- "$path_dir" && pwd)/$path_base
+			fi
+			;;
+		*)
+			path_dir=$(dirname -- "$root/$rel")
+			path_base=$(basename -- "$rel")
+			if [ -d "$path_dir" ]; then
+				rel=$(CDPATH= cd -- "$path_dir" && pwd)/$path_base
+			fi
+			;;
+	esac
+	case "$rel" in
+		"$root"/*)
+			rel=${rel#"$root"/}
+			;;
+	esac
+
+	for scope in $scope_paths; do
+		case "$rel" in
+			"$scope"|"$scope"/*)
+				return 0
+				;;
+		esac
+	done
+	return 1
+}
+
+check_analyzer_reports()
+{
+	local output_dir=$1
+	local report
+	local report_count=0
+	local bug_file
+
+	[ -d "$output_dir" ] || return 0
+
+	for report in "$output_dir"/scan-build-*/report-*.html; do
+		[ -e "$report" ] || continue
+		report_count=$((report_count + 1))
+		bug_file=$(sed -n 's/^<!-- BUGFILE \(.*\) -->$/\1/p' "$report" \
+			| sed -n '1p')
+		if [ -z "$bug_file" ]; then
+			gate_fail "clang static analyzer report missing BUGFILE: $report"
+			continue
+		fi
+		if path_in_scope "$bug_file"; then
+			gate_fail "clang static analyzer report in encrypted-home scope: $bug_file"
+		else
+			printf 'static-analysis-gate: note: ignored out-of-scope analyzer report: %s\n' \
+				"$bug_file" >&2
+		fi
+	done
+
+	if [ "$report_count" -eq 0 ]; then
+		return 0
+	fi
+	return 0
+}
+
+check_cppcheck_reports()
+{
+	local output_file=$1
+	local line
+	local path
+
+	[ -f "$output_file" ] || return 0
+
+	while IFS= read -r line; do
+		case "$line" in
+			/*:[0-9]*:[0-9]*:\ *|/*:[0-9]*:\ *)
+				path=${line%%:*}
+				if path_in_scope "$path"; then
+					printf '%s\n' "$line" >&2
+					gate_fail "cppcheck report in encrypted-home scope: $path"
+				fi
+				;;
+		esac
+	done <"$output_file"
+}
+
 filter_compile_database()
 {
 	local file_list=$1
@@ -252,6 +348,17 @@ filter_compile_database()
 			print "\n]\n"
 		}
 	' "$compile_commands" >"$output"
+}
+
+cppcheck_arch_defines()
+{
+	if rg -q 'x86_64-[^[:space:]/"]*-haiku|x86_64-unknown-haiku|generated\.x86_64' \
+			"$compile_commands"; then
+		printf '%s\n' '-D__x86_64__'
+	elif rg -q 'riscv64-[^[:space:]/"]*-haiku|riscv64-unknown-haiku|generated\.riscv64' \
+			"$compile_commands"; then
+		printf '%s\n' '-D__riscv' '-D__riscv_xlen=64'
+	fi
 }
 
 run_rg()
@@ -346,16 +453,35 @@ if [ "$policy_only" -eq 0 ]; then
 				filter_compile_database "$compile_record_list" "$filtered_compile_commands"
 
 			# shellcheck disable=SC2086
-			clang-tidy -p "$(dirname -- "$filtered_compile_commands")" $compile_files
+			clang-tidy --checks="$clang_tidy_checks" \
+				--header-filter='^$' \
+				--extra-arg=-Wno-error=unknown-warning-option \
+				--extra-arg=-Wno-unknown-warning-option \
+				-p "$(dirname -- "$filtered_compile_commands")" $compile_files
 
 			# analyze-build is the Clang static analyzer entry point that consumes
 			# an existing compilation database; scan-build wraps live build commands.
-			analyze-build --cdb "$filtered_compile_commands" --status-bugs \
-				--output "${TMPDIR:-/tmp}/encrypted-home-analyze-build.$$"
+			analyze_output=$work_dir/analyze-build
+			rm -rf "$analyze_output"
+			analyze-build --cdb "$filtered_compile_commands" \
+				--output "$analyze_output"
+			check_analyzer_reports "$analyze_output"
 
-			cppcheck --enable=warning,style,performance,portability \
-				--addon=cert --error-exitcode=1 \
-				--project="$filtered_compile_commands"
+			cppcheck_defines=$(cppcheck_arch_defines)
+			cppcheck_output=$work_dir/cppcheck.txt
+			# shellcheck disable=SC2086
+			cppcheck --enable=warning,performance,portability \
+				$cppcheck_defines '-D__has_builtin(x)=0' \
+				'-D__has_attribute(x)=0' \
+				-D__GNUC__=13 -D__GNUC_MINOR__=3 -D__GNUC_PATCHLEVEL__=0 \
+				-D__CHAR_BIT__=8 -D__STDC_HOSTED__=1 \
+				--suppress='syntaxError:*/generated.*/build_packages/*' \
+				--suppress='PRE32-C:*/generated.*/build_packages/*' \
+				--addon=cert \
+				--report-type=cert-cpp-2016 \
+				--project="$filtered_compile_commands" 2>"$cppcheck_output" \
+				|| gate_fail "cppcheck failed to run"
+			check_cppcheck_reports "$cppcheck_output"
 		fi
 	fi
 fi

@@ -52,8 +52,40 @@ make_fake_tool()
 	local path=$1
 	local name=$2
 
-	printf '#!/bin/sh\nprintf "%%s %%s\\n" %s "$*" >>"$STATIC_GATE_TOOL_LOG"\n' \
-		"$name" >"$path/$name"
+	if [ "$name" = analyze-build ]; then
+		printf '%s\n' \
+			'#!/bin/sh' \
+			'printf "%s %s\n" analyze-build "$*" >>"$STATIC_GATE_TOOL_LOG"' \
+			'output=' \
+			'while [ $# -gt 0 ]; do' \
+			'	case "$1" in' \
+			'		--output)' \
+			'			output=$2' \
+			'			shift 2' \
+			'			;;' \
+			'		*)' \
+			'			shift' \
+			'			;;' \
+			'	esac' \
+			'done' \
+			'if [ -n "${STATIC_GATE_ANALYZE_REPORT:-}" ]; then' \
+			'	report_dir=$output/scan-build-test' \
+			'	mkdir -p "$report_dir"' \
+			'	printf "<!-- BUGFILE %s -->\n" "$STATIC_GATE_ANALYZE_REPORT" \' \
+			'		>"$report_dir/report-test.html"' \
+			'fi' >"$path/$name"
+	elif [ "$name" = cppcheck ]; then
+		printf '%s\n' \
+			'#!/bin/sh' \
+			'printf "%s %s\n" cppcheck "$*" >>"$STATIC_GATE_TOOL_LOG"' \
+			'if [ -n "${STATIC_GATE_CPPCHECK_REPORT:-}" ]; then' \
+			'	printf "%s:12:3: warning: fake cppcheck report [fake]\n" \' \
+			'		"$STATIC_GATE_CPPCHECK_REPORT" >&2' \
+			'fi' >"$path/$name"
+	else
+		printf '#!/bin/sh\nprintf "%%s %%s\\n" %s "$*" >>"$STATIC_GATE_TOOL_LOG"\n' \
+			"$name" >"$path/$name"
+	fi
 	chmod +x "$path/$name"
 }
 
@@ -131,6 +163,47 @@ if ! grep -q "$root/src/libs/encrypted_home/clean.cpp" "$tool_log"; then
 	printf 'expected clang-tidy to receive normalized encrypted-home file\n' >&2
 	exit 1
 fi
+if ! grep -q '^clang-tidy .*--checks=clang-analyzer-\*,bugprone-\*,cert-\*,cppcoreguidelines-\*,performance-\*,portability-\*' "$tool_log"; then
+	printf 'expected clang-tidy to enable security-focused checks\n' >&2
+	exit 1
+fi
+if ! grep -q -- '--header-filter=' "$tool_log"; then
+	printf 'expected clang-tidy to suppress unrelated header diagnostics\n' >&2
+	exit 1
+fi
+if ! grep -q '^clang-tidy .*--extra-arg=-Wno-error=unknown-warning-option .*--extra-arg=-Wno-unknown-warning-option' "$tool_log"; then
+	printf 'expected clang-tidy to tolerate GCC-only warning flags\n' >&2
+	exit 1
+fi
+if ! grep -q '^cppcheck .*--addon=cert' "$tool_log"; then
+	printf 'expected cppcheck to run the CERT addon\n' >&2
+	exit 1
+fi
+rm -f "$tool_log"
+STATIC_GATE_ANALYZE_REPORT="$root/headers/os/interface/LayoutBuilder.h" \
+	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_pass \
+	"$script_dir/static_analysis_gate.sh" --root "$root" \
+	--compile-commands "$compile_commands"
+rm -f "$tool_log"
+STATIC_GATE_ANALYZE_REPORT="$root/src/libs/encrypted_home/clean.cpp" \
+	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_fail \
+	"$script_dir/static_analysis_gate.sh" --root "$root" \
+	--compile-commands "$compile_commands"
+rm -f "$tool_log"
+STATIC_GATE_ANALYZE_REPORT="$root/generated.x86_64/../src/libs/encrypted_home/clean.cpp" \
+	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_fail \
+	"$script_dir/static_analysis_gate.sh" --root "$root" \
+	--compile-commands "$compile_commands"
+rm -f "$tool_log"
+STATIC_GATE_CPPCHECK_REPORT="$root/headers/private/kernel/util/AutoLock.h" \
+	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_pass \
+	"$script_dir/static_analysis_gate.sh" --root "$root" \
+	--compile-commands "$compile_commands"
+rm -f "$tool_log"
+STATIC_GATE_CPPCHECK_REPORT="$root/src/libs/encrypted_home/clean.cpp" \
+	STATIC_GATE_TOOL_LOG="$tool_log" PATH="$fakebin:$PATH" assert_fail \
+	"$script_dir/static_analysis_gate.sh" --root "$root" \
+	--compile-commands "$compile_commands"
 rm -f "$tool_log"
 (
 	cd "$build_dir"

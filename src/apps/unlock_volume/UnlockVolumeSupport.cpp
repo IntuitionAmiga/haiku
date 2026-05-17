@@ -133,8 +133,13 @@ ReadSettingsFile(const char* path, EncryptedHomeSettings& settings)
 
 	std::string contents;
 	char buffer[256];
-	while (size_t bytes = std::fread(buffer, 1, sizeof(buffer), file))
-		contents.append(buffer, bytes);
+	for (;;) {
+		size_t bytes = std::fread(buffer, 1, sizeof(buffer), file);
+		if (bytes > 0)
+			contents.append(buffer, bytes);
+		if (bytes < sizeof(buffer))
+			break;
+	}
 	if (std::ferror(file)) {
 		status_t status = errno == 0 ? B_IO_ERROR : errno;
 		std::fclose(file);
