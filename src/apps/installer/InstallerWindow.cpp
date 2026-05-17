@@ -247,6 +247,11 @@ InstallerWindow::InstallerWindow()
 	fEncryptHomeCheckBox = new BCheckBox("encryptHome",
 		B_TRANSLATE("Encrypt home folder"),
 		new BMessage(ENCRYPT_HOME_CHANGED));
+	fEncryptHomeCheckBox->SetToolTip(B_TRANSLATE("Encrypts /boot/home on a "
+		"separate partition and asks for a passphrase at boot. This protects "
+		"home contents on a powered-off disk, but it does not protect the "
+		"system partition, running sessions, or detect encrypted data "
+		"tampering."));
 	fPassphraseControl = new BTextControl("homePassphrase",
 		B_TRANSLATE("Passphrase:"), "", new BMessage(ENCRYPT_HOME_CHANGED));
 	fPassphraseControl->SetModificationMessage(

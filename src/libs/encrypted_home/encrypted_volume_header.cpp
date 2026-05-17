@@ -23,17 +23,9 @@
 namespace BPrivate::EncryptedHome {
 namespace {
 
-constexpr std::array<std::byte, 8> kMagic = {
-	std::byte{'H'}, std::byte{'A'}, std::byte{'I'}, std::byte{'K'},
-	std::byte{'U'}, std::byte{'E'}, std::byte{'N'}, std::byte{'C'}
-};
-constexpr size_t kAuthenticatedLength = 0x0c0;
-constexpr size_t kHmacOffset = 0x0c0;
-constexpr size_t kPaddingOffset = 0x0e0;
-constexpr uint64 kPayloadOffsetSectors = 16;
-constexpr uint32 kMaxArgon2TimeCost = 10;
-constexpr uint32 kMaxArgon2MemoryCostKiB = 65536;
-constexpr uint32 kMaxArgon2Parallelism = 16;
+constexpr uint32 kMaxArgon2TimeCost = wire::kMaxArgon2TimeCost;
+constexpr uint32 kMaxArgon2MemoryCostKiB = wire::kMaxArgon2MemoryCostKiB;
+constexpr uint32 kMaxArgon2Parallelism = wire::kMaxArgon2Parallelism;
 
 std::array<std::byte, 64> sLastDerivedBuffer = {};
 
@@ -170,8 +162,8 @@ ComputeHmac(HeaderBytes& header, std::span<const std::byte, 32> macKey)
 	unsigned char* result = HMAC(EVP_sha256(), macKey.data(),
 		static_cast<int>(macKey.size()),
 		reinterpret_cast<const unsigned char*>(header.data()),
-		kAuthenticatedLength,
-		reinterpret_cast<unsigned char*>(header.data() + kHmacOffset),
+		wire::kHmacCoveredEnd,
+		reinterpret_cast<unsigned char*>(header.data() + wire::kHeaderHmacOffset),
 		&hmacLength);
 	if (result == nullptr || hmacLength != 32)
 		return std::unexpected(B_ERROR);
@@ -188,12 +180,12 @@ VerifyHmac(const HeaderBytes& header, std::span<const std::byte, 32> macKey)
 	unsigned char* result = HMAC(EVP_sha256(), macKey.data(),
 		static_cast<int>(macKey.size()),
 		reinterpret_cast<const unsigned char*>(header.data()),
-		kAuthenticatedLength,
+		wire::kHmacCoveredEnd,
 		reinterpret_cast<unsigned char*>(expected.data()), &hmacLength);
 	if (result == nullptr || hmacLength != expected.size())
 		return std::unexpected(B_ERROR);
 
-	if (CRYPTO_memcmp(expected.data(), header.data() + kHmacOffset,
+	if (CRYPTO_memcmp(expected.data(), header.data() + wire::kHeaderHmacOffset,
 			expected.size()) != 0) {
 		return std::unexpected(B_PERMISSION_DENIED);
 	}
@@ -215,7 +207,8 @@ WrapMasterKey(HeaderBytes& header, std::span<const std::byte, 32> kek,
 	}
 
 	const int wrappedLength = AES_wrap_key(&aesKey, nullptr,
-		reinterpret_cast<unsigned char*>(header.data() + 0x070),
+		reinterpret_cast<unsigned char*>(
+			header.data() + wire::kWrappedMasterKeyOffset),
 		reinterpret_cast<const unsigned char*>(masterKey.data()),
 		static_cast<unsigned int>(masterKey.size()));
 #pragma GCC diagnostic pop
@@ -272,20 +265,23 @@ BuildHeader(std::span<const std::byte> passphrase, uint32 sequenceNumber,
 		return std::unexpected(B_BAD_VALUE);
 
 	HeaderBytes header = {};
-	std::copy(kMagic.begin(), kMagic.end(), header.begin());
-	WriteLE16(header, 0x008, 1);
-	WriteLE16(header, 0x00a, 0);
-	WriteLE32(header, 0x00c, sectorSize);
-	WriteLE64(header, 0x010, kPayloadOffsetSectors);
-	WriteLE64(header, 0x018, payloadSizeSectors);
-	WriteLE32(header, 0x020, cipherId);
-	WriteLE32(header, 0x024, kArgon2id);
-	WriteLE32(header, 0x028, timeCost);
-	WriteLE32(header, 0x02c, memoryCostKiB);
-	WriteLE32(header, 0x030, parallelism);
-	std::copy(volumeUuid.begin(), volumeUuid.end(), header.begin() + 0x040);
-	std::copy(salt.begin(), salt.end(), header.begin() + 0x050);
-	WriteLE32(header, 0x0b8, sequenceNumber);
+	for (size_t i = 0; i < wire::kMagic.size(); i++)
+		header[i] = std::byte{wire::kMagic[i]};
+	WriteLE16(header, wire::kVersionOffset, wire::kHeaderVersion);
+	WriteLE16(header, wire::kFlagsOffset, 0);
+	WriteLE32(header, wire::kSectorSizeOffset, sectorSize);
+	WriteLE64(header, wire::kPayloadOffsetSectorsOffset,
+		wire::kPayloadOffsetSectors);
+	WriteLE64(header, wire::kPayloadSizeSectorsOffset, payloadSizeSectors);
+	WriteLE32(header, wire::kCipherIdOffset, cipherId);
+	WriteLE32(header, wire::kKdfIdOffset, kArgon2id);
+	WriteLE32(header, wire::kArgon2TimeCostOffset, timeCost);
+	WriteLE32(header, wire::kArgon2MemoryCostOffset, memoryCostKiB);
+	WriteLE32(header, wire::kArgon2ParallelismOffset, parallelism);
+	std::copy(volumeUuid.begin(), volumeUuid.end(),
+		header.begin() + wire::kVolumeUuidOffset);
+	std::copy(salt.begin(), salt.end(), header.begin() + wire::kKdfSaltOffset);
+	WriteLE32(header, wire::kSequenceNumberOffset, sequenceNumber);
 
 	auto derived = DeriveKey(passphrase, salt, timeCost, memoryCostKiB,
 		parallelism);
@@ -311,52 +307,61 @@ EncryptedVolumeHeader::Parse(std::span<const std::byte> header)
 {
 	if (header.size() != HeaderBytes{}.size())
 		return std::unexpected(B_BAD_VALUE);
-	if (!std::equal(kMagic.begin(), kMagic.end(), header.begin()))
-		return std::unexpected(B_BAD_DATA);
+	for (size_t i = 0; i < wire::kMagic.size(); i++) {
+		if (header[i] != std::byte{wire::kMagic[i]})
+			return std::unexpected(B_BAD_DATA);
+	}
 
 	ParsedHeader parsed;
-	parsed.version = ReadLE16(header, 0x008);
-	if (parsed.version > 1)
+	parsed.version = ReadLE16(header, wire::kVersionOffset);
+	if (parsed.version > wire::kHeaderVersion)
 		return std::unexpected(B_UNSUPPORTED);
-	if (parsed.version != 1)
+	if (parsed.version != wire::kHeaderVersion)
 		return std::unexpected(B_BAD_DATA);
 
-	parsed.flags = ReadLE16(header, 0x00a);
-	parsed.sectorSize = ReadLE32(header, 0x00c);
-	parsed.payloadOffsetSectors = ReadLE64(header, 0x010);
-	parsed.payloadSizeSectors = ReadLE64(header, 0x018);
-	parsed.cipherId = ReadLE32(header, 0x020);
-	parsed.kdfId = ReadLE32(header, 0x024);
-	parsed.argon2TimeCost = ReadLE32(header, 0x028);
-	parsed.argon2MemoryCostKiB = ReadLE32(header, 0x02c);
-	parsed.argon2Parallelism = ReadLE32(header, 0x030);
-	parsed.sequenceNumber = ReadLE32(header, 0x0b8);
+	parsed.flags = ReadLE16(header, wire::kFlagsOffset);
+	parsed.sectorSize = ReadLE32(header, wire::kSectorSizeOffset);
+	parsed.payloadOffsetSectors = ReadLE64(header,
+		wire::kPayloadOffsetSectorsOffset);
+	parsed.payloadSizeSectors = ReadLE64(header,
+		wire::kPayloadSizeSectorsOffset);
+	parsed.cipherId = ReadLE32(header, wire::kCipherIdOffset);
+	parsed.kdfId = ReadLE32(header, wire::kKdfIdOffset);
+	parsed.argon2TimeCost = ReadLE32(header, wire::kArgon2TimeCostOffset);
+	parsed.argon2MemoryCostKiB = ReadLE32(header,
+		wire::kArgon2MemoryCostOffset);
+	parsed.argon2Parallelism = ReadLE32(header, wire::kArgon2ParallelismOffset);
+	parsed.sequenceNumber = ReadLE32(header, wire::kSequenceNumberOffset);
 
 	if (parsed.flags != 0
 		|| (parsed.sectorSize != 512 && parsed.sectorSize != 4096)
-		|| parsed.payloadOffsetSectors != kPayloadOffsetSectors
+		|| parsed.payloadOffsetSectors != wire::kPayloadOffsetSectors
 		|| parsed.payloadSizeSectors == 0
 		|| MasterKeyLength(parsed.cipherId) == 0
 		|| parsed.kdfId != kArgon2id
 		|| !KdfParametersAreBounded(parsed.argon2TimeCost,
 			parsed.argon2MemoryCostKiB, parsed.argon2Parallelism)
 		|| parsed.sequenceNumber == 0
-		|| !AllZero(header.subspan(0x034, 12))
-		|| !AllZero(header.subspan(0x0bc, 4))
-		|| !AllZero(header.subspan(kPaddingOffset))) {
+		|| !AllZero(header.subspan(wire::kReserved0Offset,
+			wire::kReserved0Size))
+		|| !AllZero(header.subspan(wire::kReserved1Offset,
+			wire::kReserved1Size))
+		|| !AllZero(header.subspan(wire::kPaddingOffset))) {
 		return std::unexpected(B_BAD_DATA);
 	}
 
-	std::copy(header.begin() + 0x040, header.begin() + 0x050,
-		parsed.volumeUuid.begin());
-	std::copy(header.begin() + 0x050, header.begin() + 0x070,
+	std::copy(header.begin() + wire::kVolumeUuidOffset,
+		header.begin() + wire::kKdfSaltOffset, parsed.volumeUuid.begin());
+	std::copy(header.begin() + wire::kKdfSaltOffset,
+		header.begin() + wire::kWrappedMasterKeyOffset,
 		parsed.kdfSalt.begin());
-	std::copy(header.begin() + 0x070, header.begin() + 0x0b8,
+	std::copy(header.begin() + wire::kWrappedMasterKeyOffset,
+		header.begin() + wire::kSequenceNumberOffset,
 		parsed.wrappedMasterKey.begin());
 
 	if (parsed.cipherId == kCipherAES128XTS
 		&& !AllZero(std::span<const std::byte>(parsed.wrappedMasterKey)
-			.subspan(40))) {
+			.subspan(wire::kAes128WrappedMasterKeySize))) {
 		return std::unexpected(B_BAD_DATA);
 	}
 

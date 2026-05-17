@@ -96,6 +96,7 @@ SubInclude HAIKU_TOP src tools fat_shell ;
 SubInclude HAIKU_TOP src tools cppunit ;
 SubInclude HAIKU_TOP src tools create_repository_config ;
 SubInclude HAIKU_TOP src tools elfsymbolpatcher ;
+SubInclude HAIKU_TOP src tools encrypted_home_docs_gen ;
 SubInclude HAIKU_TOP src tools fixup_amiga_boot_checksum ;
 SubInclude HAIKU_TOP src tools fixup_next_boot_floppy ;
 SubInclude HAIKU_TOP src tools fixup_tos_boot_checksum ;

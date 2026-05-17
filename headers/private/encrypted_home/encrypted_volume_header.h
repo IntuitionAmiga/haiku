@@ -16,24 +16,25 @@
 
 #include <SupportDefs.h>
 
+#include <header_layout.h>
 #include <secure_buffer.h>
 
 
 namespace BPrivate::EncryptedHome {
 
-using HeaderBytes = std::array<std::byte, 4096>;
+using HeaderBytes = std::array<std::byte, wire::kHeaderSize>;
 
-constexpr uint32 kCipherAES128XTS = 1;
-constexpr uint32 kCipherAES256XTS = 2;
-constexpr uint32 kArgon2id = 1;
+constexpr uint32 kCipherAES128XTS = wire::kCipherAES128XTS;
+constexpr uint32 kCipherAES256XTS = wire::kCipherAES256XTS;
+constexpr uint32 kArgon2id = wire::kKdfArgon2id;
 
 struct FormatOptions {
 	uint32 sectorSize = 512;
 	uint64 payloadSizeSectors = 0;
 	uint32 cipherId = kCipherAES256XTS;
-	uint32 argon2TimeCost = 3;
-	uint32 argon2MemoryCostKiB = 65536;
-	uint32 argon2Parallelism = 4;
+	uint32 argon2TimeCost = wire::kDefaultArgon2TimeCost;
+	uint32 argon2MemoryCostKiB = wire::kDefaultArgon2MemoryCostKiB;
+	uint32 argon2Parallelism = wire::kDefaultArgon2Parallelism;
 };
 
 struct ParsedHeader {

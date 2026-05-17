@@ -1,0 +1,30 @@
+SubDir HAIKU_TOP src tests tools encrypted_home_docs_gen ;
+
+UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) src tools encrypted_home_docs_gen ] : true ;
+
+SimpleTest TestDocsMatchSource :
+	TestDocsMatchSource.cpp
+	EncryptedHomeDocs.cpp
+	:
+	[ TargetLibstdc++ ]
+	[ TargetLibsupc++ ]
+;
+
+SimpleTest TestNonGoalsCoverage :
+	TestNonGoalsCoverage.cpp
+	:
+	[ TargetLibstdc++ ]
+	[ TargetLibsupc++ ]
+;
+
+SEARCH on [ FGristFiles EncryptedHomeDocs.cpp ]
+	= [ FDirName $(HAIKU_TOP) src tools encrypted_home_docs_gen ] ;
+
+ObjectC++Flags [ FGristFiles TestDocsMatchSource.o TestNonGoalsCoverage.o
+	EncryptedHomeDocs.o ] :
+	-std=c++23
+	-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+	-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+	-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+;

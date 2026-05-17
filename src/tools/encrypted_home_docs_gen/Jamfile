@@ -1,0 +1,20 @@
+SubDir HAIKU_TOP src tools encrypted_home_docs_gen ;
+
+UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
+
+BuildPlatformMain <build>encrypted_home_docs_gen :
+	main.cpp
+	EncryptedHomeDocs.cpp
+	:
+	$(HOST_LIBSTDC++) $(HOST_LIBSUPC++)
+;
+
+NotFile encrypted_home_docs_gen ;
+Depends encrypted_home_docs_gen : <build>encrypted_home_docs_gen ;
+
+ObjectC++Flags [ FGristFiles main.o EncryptedHomeDocs.o ] :
+	-std=c++23
+	-Werror -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+	-Wcast-align -Wformat=2 -Wnull-dereference -Wdouble-promotion
+	-Wold-style-cast -Wnon-virtual-dtor -Wno-pedantic
+;
