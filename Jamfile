@@ -4,6 +4,14 @@ SubDir HAIKU_TOP ;
 local architectureObject ;
 for architectureObject in [ MultiArchSubDirSetup ] {
 	on $(architectureObject) {
+		# This branch's encrypted-home support is built by default on the
+		# architectures where the feature is supported. Enable the OpenSSL build
+		# feature before BuildFeatures is parsed, otherwise encrypted-home
+		# targets can be silently compiled out of direct and image builds.
+		if $(TARGET_PACKAGING_ARCH) in x86_64 riscv64 {
+			HAIKU_BUILD_FEATURE_SSL = 1 ;
+		}
+
 		include [ FDirName $(HAIKU_BUILD_RULES_DIR) BuildFeatures ] ;
 
 		# Let the target platform depend on the external header directories such
