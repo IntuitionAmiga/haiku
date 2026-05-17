@@ -11,7 +11,9 @@ usage: static_analysis_gate.sh [--root <haiku-tree>] [--compile-commands <file>]
 Runs the local encrypted-home security gate. The policy-only mode executes
 project-specific source checks and is suitable for fast self-tests.
 tool-presence-only also verifies the local analyzer toolchain. A full analyzer
-run requires --compile-commands.
+run requires --compile-commands. If CPPCHECK_CERT_ADDON names a local cppcheck
+CERT addon, full mode includes it; otherwise cppcheck runs the open-source
+warning, performance, and portability checks while clang-tidy runs CERT checks.
 USAGE
 }
 
@@ -468,18 +470,16 @@ if [ "$policy_only" -eq 0 ]; then
 			check_analyzer_reports "$analyze_output"
 
 			cppcheck_defines=$(cppcheck_arch_defines)
-			cppcheck_cert_addon=--addon=cert
-			cppcheck_ready=1
+			cppcheck_cert_addon=
 			if [ -n "${CPPCHECK_CERT_ADDON:-}" ]; then
 				if [ -f "$CPPCHECK_CERT_ADDON" ]; then
 					cppcheck_cert_addon=--addon=$CPPCHECK_CERT_ADDON
 				else
 					gate_fail "CPPCHECK_CERT_ADDON does not name a file: $CPPCHECK_CERT_ADDON"
-					cppcheck_ready=0
 				fi
 			fi
 			cppcheck_output=$work_dir/cppcheck.txt
-			if [ "$cppcheck_ready" -eq 1 ]; then
+			if [ -n "$cppcheck_cert_addon" ]; then
 				# shellcheck disable=SC2086
 				cppcheck --enable=warning,performance,portability \
 					$cppcheck_defines '-D__has_builtin(x)=0' \
@@ -492,8 +492,19 @@ if [ "$policy_only" -eq 0 ]; then
 					--report-type=cert-cpp-2016 \
 					--project="$filtered_compile_commands" 2>"$cppcheck_output" \
 					|| gate_fail "cppcheck failed to run"
-				check_cppcheck_reports "$cppcheck_output"
+			else
+				# shellcheck disable=SC2086
+				cppcheck --enable=warning,performance,portability \
+					$cppcheck_defines '-D__has_builtin(x)=0' \
+					'-D__has_attribute(x)=0' \
+					-D__GNUC__=13 -D__GNUC_MINOR__=3 -D__GNUC_PATCHLEVEL__=0 \
+					-D__CHAR_BIT__=8 -D__STDC_HOSTED__=1 \
+					--suppress='syntaxError:*/generated.*/build_packages/*' \
+					--suppress='PRE32-C:*/generated.*/build_packages/*' \
+					--project="$filtered_compile_commands" 2>"$cppcheck_output" \
+					|| gate_fail "cppcheck failed to run"
 			fi
+			check_cppcheck_reports "$cppcheck_output"
 		fi
 	fi
 fi

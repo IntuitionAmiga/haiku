@@ -186,12 +186,12 @@ if ! grep -q '^clang-tidy .*--extra-arg=-Wno-error=unknown-warning-option .*--ex
 	printf 'expected clang-tidy to tolerate GCC-only warning flags\n' >&2
 	exit 1
 fi
-if ! grep -q '^cppcheck .*--report-type=cert-cpp-2016' "$tool_log"; then
-	printf 'expected cppcheck to emit CERT report classifications\n' >&2
+if grep -q '^cppcheck .*--addon=cert' "$tool_log"; then
+	printf 'did not expect cppcheck to require the proprietary CERT addon by default\n' >&2
 	exit 1
 fi
-if ! grep -q '^cppcheck .*--addon=cert' "$tool_log"; then
-	printf 'expected cppcheck to run the CERT addon by default\n' >&2
+if grep -q '^cppcheck .*--report-type=cert-cpp-2016' "$tool_log"; then
+	printf 'did not expect cppcheck to emit CERT classifications without an addon\n' >&2
 	exit 1
 fi
 rm -f "$tool_log"
@@ -206,6 +206,10 @@ CPPCHECK_CERT_ADDON="$cert_addon" \
 	--compile-commands "$compile_commands"
 if ! grep -F -q -- "--addon=$cert_addon" "$tool_log"; then
 	printf 'expected cppcheck to use explicit CERT addon path\n' >&2
+	exit 1
+fi
+if ! grep -q '^cppcheck .*--report-type=cert-cpp-2016' "$tool_log"; then
+	printf 'expected cppcheck to emit CERT report classifications with addon\n' >&2
 	exit 1
 fi
 rm -f "$tool_log"
