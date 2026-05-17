@@ -104,4 +104,21 @@ export HAIKU_ENCRYPTED_HOME_WORK_DIR="$tmp/work"
 export HAIKU_ENCRYPTED_HOME_PREFLIGHT_ONLY=1
 assert_pass "$script_dir/image_gate.sh" phase8
 
+unset HAIKU_ENCRYPTED_HOME_PREFLIGHT_ONLY
+export HAIKU_ENCRYPTED_HOME_IMAGE="$tmp/haiku-anyboot.iso"
+export HAIKU_ENCRYPTED_HOME_SELF_TEST_DRY_RUN=1
+export HAIKU_ENCRYPTED_HOME_SELF_TEST_ASSUME_KVM=1
+printf 'synthetic image\n' >"$HAIKU_ENCRYPTED_HOME_IMAGE"
+assert_pass "$script_dir/image_gate.sh" phase7
+assert_pass grep -F "status: pass path-a-gui" "$tmp/work/phase7.log"
+assert_pass grep -F "status: pass path-b-install-only" "$tmp/work/phase7.log"
+assert_pass grep -F "status: non-gating-diagnostic path-a-headless" "$tmp/work/phase7.log"
+assert_pass grep -F "status: non-gating-diagnostic path-b-install-headless" "$tmp/work/phase7.log"
+assert_pass grep -F " -display vnc=:5 -serial file:$tmp/work/path-b-install-headless_serial.log # driver=$script_dir/path_b_headless.exp" "$tmp/work/phase7.log"
+assert_pass "$script_dir/image_gate.sh" phase8
+assert_pass grep -F "status: pass path-a-gui" "$tmp/work/phase8.log"
+assert_pass grep -F "status: pass path-b-gui" "$tmp/work/phase8.log"
+assert_pass grep -F "status: non-gating-diagnostic path-a-headless" "$tmp/work/phase8.log"
+assert_pass grep -F "status: non-gating-diagnostic path-b-headless" "$tmp/work/phase8.log"
+
 printf 'status: pass harness-self-test\n'

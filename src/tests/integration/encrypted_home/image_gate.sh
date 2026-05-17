@@ -27,6 +27,13 @@ phase=${1:-}
 
 work_dir=${HAIKU_ENCRYPTED_HOME_WORK_DIR:-"$PWD/encrypted_home_image_gate_$phase"}
 mkdir -p "$work_dir"
+phase_log="$work_dir/$phase.log"
+: >"$phase_log"
+
+gate_status()
+{
+	ehg_status "$@" | tee -a "$phase_log"
+}
 
 run_preflight()
 {
@@ -44,6 +51,11 @@ run_preflight()
 
 check_kvm()
 {
+	if [ "${HAIKU_ENCRYPTED_HOME_SELF_TEST_ASSUME_KVM:-0}" = 1 ]; then
+		ehg_note "KVM check skipped by HAIKU_ENCRYPTED_HOME_SELF_TEST_ASSUME_KVM=1"
+		return
+	fi
+
 	ehg_require_command qemu-system-x86_64
 	[ -r /dev/kvm ] && [ -w /dev/kvm ] \
 		|| ehg_die "KVM unavailable: check /dev/kvm permissions, BIOS VT-x/AMD-V, and group membership"
@@ -57,19 +69,51 @@ check_kvm()
 		|| ehg_die "KVM unavailable: host CPU flags lack vmx/svm"
 }
 
-run_qemu_placeholder()
+run_path()
 {
 	local run_name=$1
-	local status=$2
+	local result_status=$2
+	local blocking=$3
+	local driver=$4
+	local serial_log="$work_dir/${run_name}_serial.log"
 
-	ehg_status "$status" "$run_name"
-	ehg_die "$run_name requires the VNC/QEMU driver implementation; preflight passed but lifecycle automation is not complete"
+	if [ "${HAIKU_ENCRYPTED_HOME_SELF_TEST_DRY_RUN:-0}" = 1 ]; then
+		{
+			printf 'dry-run: qemu-system-x86_64'
+			printf ' -enable-kvm -cpu host -smp 4 -m 4G'
+			printf ' -hda %s' "$HAIKU_ENCRYPTED_HOME_IMAGE"
+			printf ' -display vnc=:%s' "$5"
+			printf ' -serial file:%s' "$serial_log"
+			printf ' # driver=%s\n' "$driver"
+		} >>"$phase_log"
+		gate_status "$result_status" "$run_name"
+		return
+	fi
+
+	ehg_require_command expect
+	[ -x "$driver" ] || ehg_die "missing executable path driver: $driver"
+
+	if HAIKU_ENCRYPTED_HOME_IMAGE="$HAIKU_ENCRYPTED_HOME_IMAGE" \
+		HAIKU_ENCRYPTED_HOME_WORK_DIR="$work_dir" \
+		HAIKU_ENCRYPTED_HOME_RUN_NAME="$run_name" \
+		HAIKU_ENCRYPTED_HOME_SERIAL_LOG="$serial_log" \
+		"$driver" "$phase" "$run_name" >>"$phase_log" 2>&1; then
+		gate_status "$result_status" "$run_name"
+		return
+	fi
+
+	if [ "$blocking" = blocking ]; then
+		cat "$phase_log" >&2
+		ehg_die "$run_name failed"
+	fi
+
+	gate_status non-gating-diagnostic "$run_name"
 }
 
 run_preflight
 
 if [ "${HAIKU_ENCRYPTED_HOME_PREFLIGHT_ONLY:-0}" = 1 ]; then
-	ehg_status pass "$phase-preflight-only"
+	gate_status pass "$phase-preflight-only"
 	exit 0
 fi
 
@@ -82,15 +126,20 @@ check_kvm
 
 case "$phase" in
 	phase7)
-		run_qemu_placeholder path-a-gui pass
-		run_qemu_placeholder path-b-install-only pass
-		ehg_status non-gating-diagnostic path-a-headless
-		ehg_status non-gating-diagnostic path-b-install-headless
+		run_path path-a-gui pass blocking "$script_dir/path_a_gui.exp" 1
+		run_path path-b-install-only pass blocking \
+			"$script_dir/path_b_install_only.exp" 2
+		run_path path-a-headless non-gating-diagnostic diagnostic \
+			"$script_dir/path_a_headless.exp" 4
+		run_path path-b-install-headless non-gating-diagnostic diagnostic \
+			"$script_dir/path_b_headless.exp" 5
 		;;
 	phase8)
-		run_qemu_placeholder path-a-gui pass
-		run_qemu_placeholder path-b-gui pass
-		ehg_status non-gating-diagnostic path-a-headless
-		ehg_status non-gating-diagnostic path-b-headless
+		run_path path-a-gui pass blocking "$script_dir/path_a_gui.exp" 1
+		run_path path-b-gui pass blocking "$script_dir/path_b_gui.exp" 2
+		run_path path-a-headless non-gating-diagnostic diagnostic \
+			"$script_dir/path_a_headless.exp" 4
+		run_path path-b-headless non-gating-diagnostic diagnostic \
+			"$script_dir/path_b_headless.exp" 3
 		;;
 esac
