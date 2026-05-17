@@ -65,6 +65,12 @@ main()
 	bool ok = true;
 	ok &= CheckDoc("docs/develop/security/encrypted_home/header_format.md",
 		BPrivate::EncryptedHome::Docs::GenerateHeaderFormatMarkdown());
+	ok &= CheckDoc("docs/develop/security/encrypted_home/ioctl_format.md",
+		BPrivate::EncryptedHome::Docs::GenerateIoctlFormatMarkdown());
+	ok &= CheckDoc("docs/develop/security/encrypted_home/wire_ids.md",
+		BPrivate::EncryptedHome::Docs::GenerateWireIdsMarkdown());
+	ok &= CheckDoc("docs/develop/security/encrypted_home/settings_format.md",
+		BPrivate::EncryptedHome::Docs::GenerateSettingsFormatMarkdown());
 	ok &= CheckDoc("docs/develop/security/encrypted_home/supported_architectures.md",
 		BPrivate::EncryptedHome::Docs::GenerateSupportedArchitecturesMarkdown());
 	return ok ? 0 : 1;

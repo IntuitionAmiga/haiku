@@ -30,6 +30,7 @@
 #include <encrypted_home_disk_system.h>
 #include <encrypted_home_driver.h>
 #include <encrypted_volume_header.h>
+#include <settings_format.h>
 #include <openssl/crypto.h>
 
 
@@ -405,7 +406,7 @@ EncryptedHomeProvisioner::PrepareMountPoint(const char* targetDirectory)
 status_t
 EncryptedHomeProvisioner::RemoveSettings(const char* targetDirectory)
 {
-	BPath settingsPath(targetDirectory, "system/settings/encrypted_home");
+	BPath settingsPath(targetDirectory, settings::kTargetSettingsPath);
 	status_t status = settingsPath.InitCheck();
 	if (status != B_OK)
 		return status;
@@ -420,7 +421,7 @@ status_t
 EncryptedHomeProvisioner::WriteSettings(const char* targetDirectory,
 	const ProvisionedEncryptedHome& provisionedHome)
 {
-	BPath settingsDirectory(targetDirectory, "system/settings");
+	BPath settingsDirectory(targetDirectory, settings::kTargetSettingsDirectory);
 	status_t status = settingsDirectory.InitCheck();
 	if (status != B_OK)
 		return status;
@@ -428,17 +429,18 @@ EncryptedHomeProvisioner::WriteSettings(const char* targetDirectory,
 	if (status != B_OK)
 		return status;
 
-	BPath settingsPath(settingsDirectory.Path(), "encrypted_home");
-	std::FILE* settings = std::fopen(settingsPath.Path(), "w");
-	if (settings == NULL)
+	BPath settingsPath(settingsDirectory.Path(), settings::kSettingsFileName);
+	std::FILE* settingsFile = std::fopen(settingsPath.Path(), "w");
+	if (settingsFile == NULL)
 		return errno;
-	if (std::fprintf(settings, "enabled true\nvolume_uuid %s\n",
+	if (std::fprintf(settingsFile, "%s %s\n%s %s\n", settings::kEnabledKey,
+			settings::kEnabledTrueValue, settings::kVolumeUuidKey,
 			provisionedHome.volumeUuid.String()) < 0) {
 		status_t writeStatus = errno;
-		std::fclose(settings);
+		std::fclose(settingsFile);
 		return writeStatus;
 	}
-	if (std::fclose(settings) != 0)
+	if (std::fclose(settingsFile) != 0)
 		return errno;
 	return B_OK;
 }

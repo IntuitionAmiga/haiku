@@ -50,6 +50,7 @@
 #include <openssl/crypto.h>
 #include <ServerProtocol.h>
 #include <secure_buffer.h>
+#include <settings_format.h>
 
 #include <syscalls.h>
 
@@ -65,7 +66,6 @@ namespace {
 using namespace BPrivate::EncryptedHome;
 using namespace BPrivate::EncryptedHome::Unlock;
 
-constexpr const char* kSettingsPath = "/boot/system/settings/encrypted_home";
 constexpr size_t kMaxPassphraseLength = 1024;
 constexpr status_t kOk = 0;
 
@@ -441,9 +441,10 @@ public:
 
 	void ReadyToRun() override
 	{
-		EncryptedHomeSettings settings;
-		status_t status = ReadSettingsFile(kSettingsPath, settings);
-		if (!SettingsRequireUnlock(status, settings)) {
+		EncryptedHomeSettings encryptedHomeSettings;
+		status_t status = ReadSettingsFile(settings::kBootSettingsPath,
+			encryptedHomeSettings);
+		if (!SettingsRequireUnlock(status, encryptedHomeSettings)) {
 			fExitStatus = status == kOk || status == B_ENTRY_NOT_FOUND
 				? 0 : status;
 			if (fExitStatus == 0)
@@ -453,13 +454,14 @@ public:
 		}
 
 		if (const char* scripted = std::getenv("HAIKU_UNLOCK_VOLUME_PASSPHRASE")) {
-			auto result = UnlockEncryptedHome(settings, PassphraseBytes(scripted));
+			auto result = UnlockEncryptedHome(encryptedHomeSettings,
+				PassphraseBytes(scripted));
 			fExitStatus = result.has_value() ? 0 : result.error();
 			PostMessage(B_QUIT_REQUESTED);
 			return;
 		}
 
-		UnlockWindow* window = new UnlockWindow(settings, fExitStatus);
+		UnlockWindow* window = new UnlockWindow(encryptedHomeSettings, fExitStatus);
 		window->Show();
 	}
 

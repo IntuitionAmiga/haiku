@@ -1,6 +1,11 @@
 SubDir HAIKU_TOP src tools encrypted_home_docs_gen ;
 
 UseHeaders [ FDirName $(HAIKU_TOP) headers private encrypted_home ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) build config_headers ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) headers os ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) headers os drivers ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) headers os storage ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) headers os support ] : true ;
 
 BuildPlatformMain <build>encrypted_home_docs_gen :
 	main.cpp

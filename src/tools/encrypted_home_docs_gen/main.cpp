@@ -21,12 +21,25 @@ main(int argc, char** argv)
 		std::cout << GenerateHeaderFormatMarkdown();
 		return 0;
 	}
+	if (mode == "ioctl-format") {
+		std::cout << GenerateIoctlFormatMarkdown();
+		return 0;
+	}
+	if (mode == "wire-ids") {
+		std::cout << GenerateWireIdsMarkdown();
+		return 0;
+	}
+	if (mode == "settings-format") {
+		std::cout << GenerateSettingsFormatMarkdown();
+		return 0;
+	}
 	if (mode == "supported-architectures") {
 		std::cout << GenerateSupportedArchitecturesMarkdown();
 		return 0;
 	}
 
 	std::cerr << "usage: encrypted_home_docs_gen "
-		"[header-format|supported-architectures]\n";
+		"[header-format|ioctl-format|wire-ids|settings-format|"
+		"supported-architectures]\n";
 	return 1;
 }

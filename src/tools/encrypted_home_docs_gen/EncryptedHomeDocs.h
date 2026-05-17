@@ -14,6 +14,9 @@
 namespace BPrivate::EncryptedHome::Docs {
 
 std::string GenerateHeaderFormatMarkdown();
+std::string GenerateIoctlFormatMarkdown();
+std::string GenerateWireIdsMarkdown();
+std::string GenerateSettingsFormatMarkdown();
 std::string GenerateSupportedArchitecturesMarkdown();
 
 } // namespace BPrivate::EncryptedHome::Docs

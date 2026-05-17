@@ -13,6 +13,7 @@
 #include <string>
 
 #include <Errors.h>
+#include <settings_format.h>
 
 
 namespace BPrivate::EncryptedHome::Unlock {
@@ -67,9 +68,9 @@ Trim(std::string_view text)
 
 
 status_t
-ParseSettings(std::string_view contents, EncryptedHomeSettings& settings)
+ParseSettings(std::string_view contents, EncryptedHomeSettings& encryptedHomeSettings)
 {
-	settings = {};
+	encryptedHomeSettings = {};
 	bool sawEnabled = false;
 	bool sawUuid = false;
 
@@ -90,16 +91,17 @@ ParseSettings(std::string_view contents, EncryptedHomeSettings& settings)
 		std::string_view value = space == std::string_view::npos
 			? std::string_view() : Trim(line.substr(space + 1));
 
-		if (key == "enabled") {
-			if (value == "true")
-				settings.enabled = true;
-			else if (value == "false")
-				settings.enabled = false;
+		if (key == settings::kEnabledKey) {
+			if (value == settings::kEnabledTrueValue)
+				encryptedHomeSettings.enabled = true;
+			else if (value == settings::kEnabledFalseValue)
+				encryptedHomeSettings.enabled = false;
 			else
 				return B_BAD_VALUE;
 			sawEnabled = true;
-		} else if (key == "volume_uuid") {
-			status_t status = DecodeUuid(value, settings.volumeUuid);
+		} else if (key == settings::kVolumeUuidKey) {
+			status_t status = DecodeUuid(value,
+				encryptedHomeSettings.volumeUuid);
 			if (status != kOk)
 				return status;
 			sawUuid = true;
@@ -108,7 +110,7 @@ ParseSettings(std::string_view contents, EncryptedHomeSettings& settings)
 
 	if (!sawEnabled)
 		return B_BAD_VALUE;
-	if (settings.enabled && !sawUuid)
+	if (encryptedHomeSettings.enabled && !sawUuid)
 		return B_BAD_VALUE;
 	return kOk;
 }
