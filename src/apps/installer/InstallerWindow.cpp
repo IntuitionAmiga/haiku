@@ -248,8 +248,8 @@ InstallerWindow::InstallerWindow()
 		B_TRANSLATE("Encrypt home folder (separate partition)"),
 		new BMessage(ENCRYPT_HOME_CHANGED));
 	fEncryptHomeCheckBox->SetToolTip(B_TRANSLATE("Encrypts /boot/home on an "
-		"unused separate partition. The install target cannot be reused as "
-		"the home backing partition."));
+		"unmounted separate partition. Existing data on the selected home "
+		"partition will be erased after confirmation."));
 	fPassphraseControl = new BTextControl("homePassphrase",
 		B_TRANSLATE("Passphrase:"), "", new BMessage(ENCRYPT_HOME_CHANGED));
 	fPassphraseControl->SetModificationMessage(
@@ -472,9 +472,26 @@ InstallerWindow::MessageReceived(BMessage *msg)
 							::EncryptedHomeProvisioner::Validate(
 								encryptedHomeOptions) != B_OK) {
 						_SetStatusMessage(B_TRANSLATE("Encrypted home "
-							"requires a separate unused home partition and "
+							"requires a separate home partition and "
 							"matching non-empty passphrases."));
 						break;
+					}
+					if (encryptedHomeOptions.enabled
+						&& homeItem != NULL
+						&& homeItem->RequiresEraseConfirmation()) {
+						BString text;
+						text.SetToFormat(B_TRANSLATE("The selected home "
+							"backing partition '%s' already contains a file "
+							"system. It will be erased and reformatted for "
+							"encrypted home. All data on that partition will "
+							"be lost."), homeItem->Name());
+						BAlert* alert = new BAlert("erase home backing",
+							text.String(), B_TRANSLATE("Cancel"),
+							B_TRANSLATE("Erase and install"), NULL,
+							B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+						alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+						if (alert->Go() != 1)
+							break;
 					}
 #endif
 
@@ -1030,8 +1047,8 @@ InstallerWindow::_UpdateControls()
 				fPassphraseConfirmControl->Text()) == 0;
 		if (homeItem == NULL) {
 			_SetStatusMessage(B_TRANSLATE("Encrypted home requires a separate "
-				"unused partition. The install target cannot be reused; open "
-				"DriveSetup, create a home partition, then return."));
+				"unmounted partition. The install target cannot be reused; "
+				"open DriveSetup, create a home partition, then return."));
 		} else if (strlen(fPassphraseControl->Text()) == 0) {
 			_SetStatusMessage(B_TRANSLATE("Enter a passphrase for the "
 				"encrypted home folder."));

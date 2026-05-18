@@ -14,7 +14,8 @@ make_root()
 	mkdir -p \
 		"$root/system/apps" \
 		"$root/system/bin" \
-			"$root/system/add-ons/kernel/drivers/disk/virtual" \
+			"$root/system/add-ons/kernel/drivers/bin" \
+			"$root/system/add-ons/kernel/drivers/dev/disk/virtual" \
 			"$root/system/add-ons/kernel/file_systems" \
 			"$root/system/add-ons/disk_systems" \
 			"$root/system/data/launch" \
@@ -26,7 +27,9 @@ make_root()
 	printf 'unlock synthetic\n' >"$root/system/apps/unlock_volume"
 	printf 'cryptvol synthetic\n' >"$root/system/bin/cryptvol"
 	printf 'driver synthetic\n' \
-		>"$root/system/add-ons/kernel/drivers/disk/virtual/encrypted_home"
+		>"$root/system/add-ons/kernel/drivers/bin/encrypted_home"
+	ln -s ../../../bin/encrypted_home \
+		"$root/system/add-ons/kernel/drivers/dev/disk/virtual/encrypted_home"
 		printf 'kernel file system synthetic\n' \
 			>"$root/system/add-ons/kernel/file_systems/encrypted_home"
 		printf 'disk system synthetic\n' \

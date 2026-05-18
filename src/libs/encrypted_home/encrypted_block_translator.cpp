@@ -25,6 +25,7 @@ namespace {
 
 constexpr uint64 kHeaderSectorCount = 16;
 constexpr uint64 kBackupHeaderSector = 8;
+constexpr size_t kZeroPayloadChunkBytes = 1024 * 1024;
 
 
 bool
@@ -138,21 +139,37 @@ std::expected<void, status_t>
 WriteEncryptedZeroPayload(BackingStore& store, xts_haiku_context& context,
 	uint32 sectorSize, uint64 payloadSizeSectors)
 {
-	std::vector<std::byte> sector(sectorSize);
+	const uint64 sectorsPerChunk = std::max<uint64>(1,
+		kZeroPayloadChunkBytes / sectorSize);
+	std::vector<std::byte> chunk(static_cast<size_t>(sectorsPerChunk)
+		* sectorSize);
 	const uint64 payloadOffset = kHeaderSectorCount * sectorSize;
 
-	for (uint64 sectorIndex = 0; sectorIndex < payloadSizeSectors;
-			sectorIndex++) {
-		std::fill(sector.begin(), sector.end(), std::byte{0});
-		if (xts_haiku_crypt(&context, sectorIndex, nullptr,
-				reinterpret_cast<uint8_t*>(sector.data()), sector.size(),
-				true) != 0) {
-			return std::unexpected(B_ERROR);
+	for (uint64 sectorIndex = 0; sectorIndex < payloadSizeSectors;) {
+		const uint64 sectorsThisChunk = std::min(sectorsPerChunk,
+			payloadSizeSectors - sectorIndex);
+		const size_t bytesThisChunk = static_cast<size_t>(sectorsThisChunk)
+			* sectorSize;
+		std::span<std::byte> encrypted = std::span(chunk).first(
+			bytesThisChunk);
+		std::fill(encrypted.begin(), encrypted.end(), std::byte{0});
+
+		for (uint64 chunkSector = 0; chunkSector < sectorsThisChunk;
+				chunkSector++) {
+			std::span<std::byte> sector = encrypted.subspan(
+				static_cast<size_t>(chunkSector) * sectorSize, sectorSize);
+			if (xts_haiku_crypt(&context, sectorIndex + chunkSector, nullptr,
+					reinterpret_cast<uint8_t*>(sector.data()),
+					sector.size(), true) != 0) {
+				return std::unexpected(B_ERROR);
+			}
 		}
+
 		if (auto result = store.WriteAt(payloadOffset
-				+ sectorIndex * sectorSize, sector); !result.has_value()) {
+				+ sectorIndex * sectorSize, encrypted); !result.has_value()) {
 			return std::unexpected(result.error());
 		}
+		sectorIndex += sectorsThisChunk;
 	}
 
 	return store.Flush();

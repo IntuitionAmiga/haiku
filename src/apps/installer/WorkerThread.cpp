@@ -791,9 +791,15 @@ WorkerThread::_PerformInstall(partition_id sourcePartitionID,
 		err = _CollectEncryptedHomeBytes(srcDirectory, encryptedHomeBytes);
 		if (err != B_OK)
 			return _InstallationError(err);
+		auto sectorSize = BPrivate::EncryptedHome::Installer
+			::EncryptedHomeProvisioner::BackingSectorSize(
+				homePartition->BlockSize(),
+				homePartition->PhysicalBlockSize());
+		if (!sectorSize.has_value())
+			return _InstallationError(sectorSize.error());
 		auto payloadBytes = BPrivate::EncryptedHome::Installer
 			::EncryptedHomeProvisioner::PayloadBytes(homePartition->Size(),
-				homePartition->BlockSize());
+				*sectorSize);
 		if (!payloadBytes.has_value())
 			return _InstallationError(payloadBytes.error());
 		if (encryptedHomeBytes > static_cast<off_t>(*payloadBytes)) {
@@ -1400,6 +1406,7 @@ HomeVisitor::Visit(BPartition* partition, int32 level)
 	PartitionMenuItem* item = new PartitionMenuItem(partition->ContentName(),
 		label, menuLabel, new BMessage(HOME_PARTITION), partition->ID());
 	item->SetIsValidTarget(isValidTarget);
+	item->SetRequiresEraseConfirmation(partition->ContainsFileSystem());
 	fMenu->AddItem(item);
 	return false;
 }

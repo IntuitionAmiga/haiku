@@ -166,9 +166,12 @@ TestBackingContentEligibility()
 	ok &= Expect(EncryptedHomeProvisioner::IsSafeBackingContent(
 			B_PARTITION_VALID, false, false, NULL),
 		"empty valid home backing partition accepted");
-	ok &= Expect(!EncryptedHomeProvisioner::IsSafeBackingContent(
+	ok &= Expect(EncryptedHomeProvisioner::IsSafeBackingContent(
 			B_PARTITION_VALID, true, false, "Be File System"),
-		"existing file system as home backing rejected");
+		"unmounted BFS home backing partition accepted");
+	ok &= Expect(!EncryptedHomeProvisioner::IsSafeBackingContent(
+			B_PARTITION_VALID, true, false, "FAT32 File System"),
+		"non-BFS file system as home backing rejected");
 	ok &= Expect(!EncryptedHomeProvisioner::IsSafeBackingContent(
 			B_PARTITION_VALID, false, true, "Intel Partition Map"),
 		"nested partition map as home backing rejected");
@@ -183,6 +186,22 @@ bool
 TestPayloadCapacityExcludesHeaderSectors()
 {
 	bool ok = true;
+	auto bfsOn512 = EncryptedHomeProvisioner::BackingSectorSize(2048, 512);
+	ok &= Expect(bfsOn512.has_value() && *bfsOn512 == 512,
+		"BFS block size on 512-byte media maps to physical sector size");
+
+	auto bfsOn4K = EncryptedHomeProvisioner::BackingSectorSize(2048, 4096);
+	ok &= Expect(bfsOn4K.has_value() && *bfsOn4K == 4096,
+		"BFS block size on 4 KiB media maps to physical sector size");
+
+	auto raw512 = EncryptedHomeProvisioner::BackingSectorSize(512, 512);
+	ok &= Expect(raw512.has_value() && *raw512 == 512,
+		"supported logical block size remains accepted");
+
+	auto unsupported = EncryptedHomeProvisioner::BackingSectorSize(2048, 1024);
+	ok &= Expect(!unsupported.has_value(),
+		"unsupported logical and physical sector sizes rejected");
+
 	auto tooSmall = EncryptedHomeProvisioner::PayloadBytes(16 * 512, 512);
 	ok &= Expect(!tooSmall.has_value(),
 		"backing partition without payload capacity rejected");
@@ -194,8 +213,9 @@ TestPayloadCapacityExcludesHeaderSectors()
 			"payload capacity excludes encrypted-home header reservation");
 	}
 
-	auto unsupported = EncryptedHomeProvisioner::PayloadBytes(64 * 1024, 1024);
-	ok &= Expect(!unsupported.has_value(),
+	auto unsupportedPayload
+		= EncryptedHomeProvisioner::PayloadBytes(64 * 1024, 1024);
+	ok &= Expect(!unsupportedPayload.has_value(),
 		"unsupported backing sector size rejected for capacity checks");
 	return ok;
 }

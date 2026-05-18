@@ -16,7 +16,8 @@ PartitionMenuItem::PartitionMenuItem(const char* name, const char* label,
 	fID(id),
 	fMenuLabel(strdup(menuLabel)),
 	fName(strdup(name)),
-	fIsValidTarget(true)
+	fIsValidTarget(true),
+	fRequiresEraseConfirmation(false)
 {
 }
 
@@ -62,3 +63,17 @@ PartitionMenuItem::IsValidTarget() const
 	return fIsValidTarget;
 }
 
+
+void
+PartitionMenuItem::SetRequiresEraseConfirmation(
+	bool requiresEraseConfirmation)
+{
+	fRequiresEraseConfirmation = requiresEraseConfirmation;
+}
+
+
+bool
+PartitionMenuItem::RequiresEraseConfirmation() const
+{
+	return fRequiresEraseConfirmation;
+}

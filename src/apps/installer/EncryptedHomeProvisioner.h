@@ -51,6 +51,8 @@ public:
 	[[nodiscard]] static bool IsSafeBackingContent(uint32 status,
 		bool containsFileSystem, bool containsPartitioningSystem,
 		const char* contentType);
+	[[nodiscard]] static std::expected<uint32, status_t> BackingSectorSize(
+		uint32 blockSize, uint32 physicalBlockSize);
 	[[nodiscard]] static std::expected<uint64, status_t> PayloadBytes(
 		off_t backingBytes, uint32 sectorSize);
 	[[nodiscard]] static std::expected<ProvisionedEncryptedHome, status_t>

@@ -96,6 +96,7 @@ public:
 
 		std::copy(buffer.begin(), buffer.end(),
 			fBytes.begin() + static_cast<ptrdiff_t>(offset));
+		fWriteCount++;
 		return {};
 	}
 
@@ -110,10 +111,16 @@ public:
 		fFailWriteOffset = offset;
 	}
 
+	size_t WriteCount() const
+	{
+		return fWriteCount;
+	}
+
 private:
 	std::vector<std::byte> fBytes;
 	bool fFailNextWrite = false;
 	uint64 fFailWriteOffset = 0;
+	size_t fWriteCount = 0;
 };
 
 
@@ -199,6 +206,8 @@ EncryptedBlockTranslatorTest::Suite()
 		&EncryptedBlockTranslatorTest::TestFormatThenReopen));
 	suite->addTest(new TestCaller("format zero fills payload",
 		&EncryptedBlockTranslatorTest::TestFormatZeroFillsPayload));
+	suite->addTest(new TestCaller("format zero fills payload in chunks",
+		&EncryptedBlockTranslatorTest::TestFormatZeroFillsPayloadInChunks));
 	suite->addTest(new TestCaller(
 		"format does not extend small file for alternate backup clear",
 		&EncryptedBlockTranslatorTest
@@ -310,6 +319,26 @@ EncryptedBlockTranslatorTest::TestFormatZeroFillsPayload()
 	const size_t payloadOffset = 16 * options.sectorSize;
 	CPPUNIT_ASSERT(!std::all_of(store.Bytes().begin()
 			+ static_cast<ptrdiff_t>(payloadOffset), store.Bytes().end(),
+		[](std::byte byte) { return byte == std::byte{0}; }));
+}
+
+
+void
+EncryptedBlockTranslatorTest::TestFormatZeroFillsPayloadInChunks()
+{
+	const FormatOptions options = TestOptions(512, 4096);
+	FakeBackingStore store(StoreSize(options));
+
+	auto translator = EncryptedBlockTranslator::Format(store, Bytes(kPassphrase),
+		options);
+	CPPUNIT_ASSERT(translator.has_value());
+
+	CPPUNIT_ASSERT(store.WriteCount() < options.payloadSizeSectors / 2);
+
+	std::vector<std::byte> readBack(options.sectorSize
+		* options.payloadSizeSectors);
+	CPPUNIT_ASSERT(translator->ReadAt(0, readBack).has_value());
+	CPPUNIT_ASSERT(std::all_of(readBack.begin(), readBack.end(),
 		[](std::byte byte) { return byte == std::byte{0}; }));
 }
 

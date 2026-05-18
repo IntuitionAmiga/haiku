@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include <Directory.h>
+#include <DiskDeviceTypes.h>
 #include <Errors.h>
 #include <Entry.h>
 #include <Path.h>
@@ -201,11 +202,28 @@ EncryptedHomeProvisioner::IsSafeBackingContent(uint32 status,
 	bool containsFileSystem, bool containsPartitioningSystem,
 	const char* contentType)
 {
-	if (containsFileSystem || containsPartitioningSystem)
+	if (containsPartitioningSystem)
 		return false;
 	if (status == B_PARTITION_UNINITIALIZED)
 		return true;
-	return status == B_PARTITION_VALID && contentType == NULL;
+	if (status != B_PARTITION_VALID)
+		return false;
+	if (!containsFileSystem)
+		return contentType == NULL;
+	return contentType != NULL
+		&& std::strcmp(contentType, kPartitionTypeBFS) == 0;
+}
+
+
+std::expected<uint32, status_t>
+EncryptedHomeProvisioner::BackingSectorSize(uint32 blockSize,
+	uint32 physicalBlockSize)
+{
+	if (EncryptedHomeSectorSizeSupported(blockSize))
+		return blockSize;
+	if (EncryptedHomeSectorSizeSupported(physicalBlockSize))
+		return physicalBlockSize;
+	return std::unexpected(B_BAD_VALUE);
 }
 
 
@@ -246,8 +264,11 @@ EncryptedHomeProvisioner::Provision(BPartition& homePartition,
 	if (status != B_OK)
 		return std::unexpected(status);
 
-	uint32 sectorSize = homePartition.BlockSize();
-	auto payloadBytes = PayloadBytes(homePartition.Size(), sectorSize);
+	auto sectorSize = BackingSectorSize(homePartition.BlockSize(),
+		homePartition.PhysicalBlockSize());
+	if (!sectorSize.has_value())
+		return std::unexpected(sectorSize.error());
+	auto payloadBytes = PayloadBytes(homePartition.Size(), *sectorSize);
 	if (!payloadBytes.has_value())
 		return std::unexpected(payloadBytes.error());
 
@@ -256,8 +277,8 @@ EncryptedHomeProvisioner::Provision(BPartition& homePartition,
 		return std::unexpected(status);
 
 	FormatOptions formatOptions;
-	formatOptions.sectorSize = sectorSize;
-	formatOptions.payloadSizeSectors = *payloadBytes / sectorSize;
+	formatOptions.sectorSize = *sectorSize;
+	formatOptions.payloadSizeSectors = *payloadBytes / *sectorSize;
 	formatOptions.cipherId = options.cipherId;
 
 	std::FILE* file = std::fopen(backingPath.Path(), "r+b");

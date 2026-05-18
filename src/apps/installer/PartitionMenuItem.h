@@ -28,12 +28,16 @@ public:
 
 			void				SetIsValidTarget(bool isValidTarget);
 			bool				IsValidTarget() const;
+			void				SetRequiresEraseConfirmation(
+									bool requiresEraseConfirmation);
+			bool				RequiresEraseConfirmation() const;
 
 private:
 			partition_id		fID;
 			char*				fMenuLabel;
 			char*				fName;
 			bool				fIsValidTarget;
+			bool				fRequiresEraseConfirmation;
 };
 
 #endif // PARTITION_MENU_ITEM_H_

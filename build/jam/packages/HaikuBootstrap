@@ -89,7 +89,6 @@ AddNewDriversToPackage disk scsi :
 	scsi_disk
 	;
 AddNewDriversToPackage disk virtual :
-	encrypted_home@x86_64,riscv64
 	ram_disk
 	remote_disk
 	#virtio_block
@@ -125,6 +124,7 @@ AddDriversToPackage bus :
 	usb_raw
 	;
 AddDriversToPackage disk virtual :
+	encrypted_home@x86_64,riscv64
 	nbd
 	;
 AddDriversToPackage graphics

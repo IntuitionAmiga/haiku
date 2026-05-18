@@ -17,6 +17,7 @@ public:
 
 	void TestFormatThenReopen();
 	void TestFormatZeroFillsPayload();
+	void TestFormatZeroFillsPayloadInChunks();
 	void TestFormatDoesNotExtendSmallFileForAlternateBackupClear();
 	void TestFormatDoesNotClearOutsideDeclaredVolume();
 	void TestRandomIO();
