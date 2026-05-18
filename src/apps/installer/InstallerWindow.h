@@ -25,9 +25,6 @@ class BGroupView;
 class BMenu;
 class BMenuField;
 class BMenuItem;
-#ifdef ENCRYPTED_HOME_AVAILABLE
-class BRadioButton;
-#endif
 class BStatusBar;
 class BStringView;
 #ifdef ENCRYPTED_HOME_AVAILABLE
@@ -89,8 +86,6 @@ private:
 			BCheckBox*			fEncryptHomeCheckBox;
 			BTextControl*		fPassphraseControl;
 			BTextControl*		fPassphraseConfirmControl;
-			BRadioButton*		fCipherAES128Button;
-			BRadioButton*		fCipherAES256Button;
 #endif
 
 			BStatusBar*			fProgressBar;

@@ -50,7 +50,6 @@
 #ifdef ENCRYPTED_HOME_AVAILABLE
 #	include "EncryptedHomeProvisioner.h"
 #	include <CheckBox.h>
-#	include <RadioButton.h>
 #	include <TextControl.h>
 #	include <encrypted_home_disk_system.h>
 #endif
@@ -261,11 +260,6 @@ InstallerWindow::InstallerWindow()
 	fPassphraseConfirmControl->SetModificationMessage(
 		new BMessage(ENCRYPT_HOME_CHANGED));
 	fPassphraseConfirmControl->TextView()->HideTyping(true);
-	fCipherAES128Button = new BRadioButton("cipherAES128",
-		B_TRANSLATE("AES-128 XTS"), new BMessage(ENCRYPT_HOME_CHANGED));
-	fCipherAES256Button = new BRadioButton("cipherAES256",
-		B_TRANSLATE("AES-256 XTS"), new BMessage(ENCRYPT_HOME_CHANGED));
-	fCipherAES256Button->SetValue(B_CONTROL_ON);
 #endif
 
 	fPackagesSwitch = new PaneSwitch("options_button");
@@ -340,10 +334,8 @@ InstallerWindow::InstallerWindow()
 				.Add(fPassphraseControl->CreateTextViewLayoutItem(), 1, 4)
 				.Add(fPassphraseConfirmControl->CreateLabelLayoutItem(), 0, 5)
 				.Add(fPassphraseConfirmControl->CreateTextViewLayoutItem(), 1, 5)
-				.Add(fCipherAES128Button, 1, 6)
-				.Add(fCipherAES256Button, 1, 7)
-				.AddGlue(2, 0, 1, 8)
-				.Add(BSpaceLayoutItem::CreateVerticalStrut(5), 0, 8, 3)
+				.AddGlue(2, 0, 1, 6)
+				.Add(BSpaceLayoutItem::CreateVerticalStrut(5), 0, 6, 3)
 #else
 				.AddGlue(2, 0, 1, 2)
 				.Add(BSpaceLayoutItem::CreateVerticalStrut(5), 0, 2, 3)
@@ -452,12 +444,8 @@ InstallerWindow::MessageReceived(BMessage *msg)
 					encryptedHomeOptions.targetPartitionID = targetItem->ID();
 					encryptedHomeOptions.homePartitionID
 						= homeItem != NULL ? homeItem->ID() : -1;
-					encryptedHomeOptions.cipherId = fCipherAES128Button->Value()
-						== B_CONTROL_ON
-							? BPrivate::EncryptedHome
-								::kEncryptedHomeCipherAES128XTS
-							: BPrivate::EncryptedHome
-								::kEncryptedHomeCipherAES256XTS;
+					encryptedHomeOptions.cipherId = BPrivate::EncryptedHome
+						::kEncryptedHomeCipherAES256XTS;
 					encryptedHomeOptions.passphrase = {
 						reinterpret_cast<const std::byte*>(
 							fPassphraseControl->Text()),
@@ -870,10 +858,6 @@ InstallerWindow::_DisableInterface(bool disable)
 		== B_CONTROL_ON);
 	fPassphraseConfirmControl->SetEnabled(!disable
 		&& fEncryptHomeCheckBox->Value() == B_CONTROL_ON);
-	fCipherAES128Button->SetEnabled(!disable && fEncryptHomeCheckBox->Value()
-		== B_CONTROL_ON);
-	fCipherAES256Button->SetEnabled(!disable && fEncryptHomeCheckBox->Value()
-		== B_CONTROL_ON);
 #endif
 }
 
@@ -1062,8 +1046,6 @@ InstallerWindow::_UpdateControls()
 	fHomeMenuField->SetEnabled(encryptHome);
 	fPassphraseControl->SetEnabled(encryptHome);
 	fPassphraseConfirmControl->SetEnabled(encryptHome);
-	fCipherAES128Button->SetEnabled(encryptHome);
-	fCipherAES256Button->SetEnabled(encryptHome);
 #else
 	fBeginButton->SetEnabled(srcItem && dstItem);
 #endif

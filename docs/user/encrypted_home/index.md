@@ -13,9 +13,9 @@ plain BFS so Haiku can boot far enough to show the unlock window.
 ## Enabling It
 
 In Installer, select the target system partition, enable "Encrypt home folder",
-choose the prepared home backing partition, enter a passphrase, and choose the
-cipher. Installer erases and formats the backing partition, then copies the home
-tree into the encrypted volume during installation.
+choose the prepared home backing partition, and enter a passphrase. Installer
+erases and formats the backing partition, then copies the home tree into the
+encrypted volume during installation.
 
 The passphrase is required to unlock the encrypted home volume. If it is
 forgotten, the encrypted home contents cannot be recovered in v1. There is no
