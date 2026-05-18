@@ -56,29 +56,37 @@ DocPath(const char* relativePath)
 int
 main()
 {
-	const std::string threatModel = ReadFile(
-		DocPath("docs/develop/security/encrypted_home/threat_model.md").c_str());
-	const std::string nonGoals = ReadFile(
-		DocPath("docs/develop/security/encrypted_home/non_goals.md").c_str());
+	const std::string securityReadme = ReadFile(
+		DocPath("docs/develop/security/encrypted_home/README.md").c_str());
+	const std::string userDoc = ReadFile(
+		DocPath("docs/user/encrypted_home/index.md").c_str());
 
-	const std::array<std::string_view, 7> goals = {
-		"Data-area tampering",
-		"Evil-maid attacks on the plaintext system partition",
-		"Cold-boot RAM extraction",
-		"Running malware in the user's session",
-		"Physical input capture",
-		"Hibernation",
-		"Header rollback after passphrase change",
+	struct CoverageNeedle {
+		std::string_view threatModel;
+		std::string_view userDoc;
 	};
 
+	const std::array<CoverageNeedle, 7> exclusions = {{
+		{"Data-area tampering", "data-area tampering"},
+		{"plaintext system partition", "plaintext system partition"},
+		{"Cold-boot RAM extraction", "cold-boot RAM extraction"},
+		{"malware in the user's session", "unlocked session"},
+		{"Physical input capture", "physical input capture"},
+		{"Hibernation", "hibernation"},
+		{"Header rollback after passphrase change",
+			"rollback after passphrase change"},
+	}};
+
 	bool ok = true;
-	for (std::string_view goal : goals) {
-		if (!Contains(nonGoals, goal)) {
-			std::cerr << "missing non-goal entry: " << goal << "\n";
+	for (const CoverageNeedle& exclusion : exclusions) {
+		if (!Contains(securityReadme, exclusion.threatModel)) {
+			std::cerr << "missing security README entry: "
+				<< exclusion.threatModel << "\n";
 			ok = false;
 		}
-		if (!Contains(threatModel, goal)) {
-			std::cerr << "missing threat-model entry: " << goal << "\n";
+		if (!Contains(userDoc, exclusion.userDoc)) {
+			std::cerr << "missing user-doc non-goal entry: "
+				<< exclusion.userDoc << "\n";
 			ok = false;
 		}
 	}
